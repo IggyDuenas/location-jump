@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Location Jump</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📍</text></svg>">
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='icon.png') }}">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
         integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
@@ -23,7 +23,20 @@
       <span class="dot" aria-hidden="true"></span>
       <span id="status-text">Looking for your iPhone…</span>
     </div>
+    <button id="btn-quit" class="quit" title="Quit Location Jump (puts your iPhone back to its real location)">
+      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M11 3h2v9h-2V3Zm-4.24 2.34 1.42 1.42A6 6 0 1 0 15.82 6.76l1.42-1.42A8 8 0 1 1 6.76 5.34Z"/></svg>
+      <span>Quit</span>
+    </button>
   </header>
+
+  <div id="quit-screen" class="quit-screen" hidden>
+    <div class="quit-card">
+      <img src="{{ url_for('static', filename='icon.png') }}" alt="" width="72" height="72">
+      <h2>Location Jump has quit</h2>
+      <p>Your iPhone is back to its real location. You can close this tab.</p>
+      <p class="hint">To start again, open Location Jump from Launchpad, or run ./start.sh.</p>
+    </div>
+  </div>
 
   <aside class="panel">
     <div class="grabber" aria-hidden="true"></div>

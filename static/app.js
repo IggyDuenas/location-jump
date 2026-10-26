@@ -537,7 +537,25 @@ $("drift").addEventListener("change", async (e) => {
   }
 });
 
+let statusTimer;
+$("btn-quit").addEventListener("click", async () => {
+  const sim = lastState.simulating;
+  if (!confirm(sim ? "Quit Location Jump? Your iPhone will go back to its real location."
+                   : "Quit Location Jump?")) return;
+  $("btn-quit").disabled = true;
+  try {
+    await api("/api/quit", {});
+  } catch (e) {
+    $("btn-quit").disabled = false;
+    showMessage(e.message, "error");
+    return;
+  }
+  clearInterval(statusTimer);
+  followTrip(false);
+  $("quit-screen").hidden = false;
+});
+
 renderSaved();
 loadSaved();
 refreshStatus();
-setInterval(refreshStatus, 4000);
+statusTimer = setInterval(refreshStatus, 4000);

@@ -81,6 +81,27 @@ body {
 .status-warn .dot { background: var(--warn); }
 .status-bad .dot { background: var(--bad); }
 
+.quit {
+  margin-left: auto; display: inline-flex; align-items: center; gap: 6px; height: 44px; padding: 0 16px;
+  font: inherit; font-size: 14px; font-weight: 500; color: var(--muted); cursor: pointer;
+  background: var(--glass); border: 1px solid var(--card-border); border-radius: 999px; box-shadow: var(--shadow);
+  backdrop-filter: blur(20px) saturate(1.6); -webkit-backdrop-filter: blur(20px) saturate(1.6);
+}
+.quit:hover { color: var(--danger); }
+.quit:disabled { opacity: .6; cursor: progress; }
+.quit-screen {
+  position: fixed; inset: 0; z-index: 2000; display: grid; place-items: center; padding: 16px;
+  background: color-mix(in srgb, var(--bg) 80%, transparent);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+}
+.quit-card {
+  max-width: 420px; padding: 32px; text-align: center; background: var(--card);
+  border: 1px solid var(--card-border); border-radius: 24px; box-shadow: var(--shadow);
+}
+.quit-card img { border-radius: 16px; }
+.quit-card h2 { margin: 12px 0 8px; font-size: 20px; text-transform: none; letter-spacing: -0.01em; color: var(--text); }
+.quit-card p { margin: 0 0 8px; }
+
 /* ---------- side panel ---------- */
 .panel {
   position: fixed; top: 16px; right: 16px; bottom: 16px; width: 368px; z-index: 1000;
@@ -308,7 +329,9 @@ body {
 
 /* ---------- phones / small windows: panel becomes a bottom sheet ---------- */
 @media (max-width: 760px) {
-  .topbar { top: 12px; left: 12px; right: 12px; }
+  .topbar { top: 12px; left: 12px; right: 12px; flex-wrap: nowrap; }
+  .quit span { display: none; }
+  .quit { padding: 0 14px; }
   .brand-name { display: none; }
   .brand { padding: 0 7px; }
   .status { flex: 1; min-width: 0; }

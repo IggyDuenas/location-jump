@@ -51,6 +51,28 @@ The script does everything for you, explaining each step as it goes:
 
 > **Port 5000 note:** On newer Macs, the AirPlay Receiver already uses port 5000. If so, `start.sh` tells you and uses **http://localhost:5001** instead. To get 5000 back, turn off *System Settings → General → AirDrop & Handoff → AirPlay Receiver*.
 
+## Optional: start it without Terminal (Location Jump.app)
+
+Run this once, in Terminal, inside the `location-jump` folder:
+
+```bash
+./install-app.sh
+```
+
+It creates **Location Jump** in your Applications folder (the one in your home folder), with its own icon. From then on:
+
+- Open it from **Launchpad** or **Spotlight** (⌘+Space, type *Location Jump*), or drag it into the **Dock** for one click.
+- The first time, it sets itself up for a minute or two (you'll see a notification).
+- If the tunnel isn't running, macOS shows its normal **password dialog** (*"Location Jump needs your Mac password…"*).
+- The app keeps running in the background (there's no Dock icon or Terminal window) and opens the page in your browser. Opening it again while it's running just brings the page back.
+- To stop it, press **Quit** at the top right of the page. That puts your iPhone back to its real location first.
+
+Good to know:
+- The app runs the code from your `location-jump` folder, so **keep that folder where it is**. If you move or rename it, run `./install-app.sh` again from the new place.
+- If you keep the folder in Documents or Desktop, macOS may ask once whether Location Jump may access that folder. Click **Allow**.
+- Its log is at `~/Library/Logs/LocationJump.log` (open it with the Console app) if something goes wrong.
+- To remove the app: `./install-app.sh --uninstall`.
+
 ## Step 4: Use it
 
 - The **status light** in the top-right should turn **green** ("Connected to *your iPhone*. Ready."). If it's yellow or red, it tells you in plain English what to fix (see Troubleshooting below).
@@ -72,7 +94,7 @@ The script does everything for you, explaining each step as it goes:
 
 ## Step 5: When you're done
 
-1. Press **Reset to Real Location** (or Ctrl+C in Terminal).
+1. Press **Quit** at the top right of the page (or **Reset to Real Location**, or Ctrl+C in Terminal).
 2. Optionally stop the background tunnel with `./stop.sh` (it asks for your password). Restarting your Mac stops it too.
 
 ---
@@ -116,4 +138,6 @@ Browser (map UI) ──HTTP──► Flask app (app.py) ──► phone.py ─�
 - **`templates/` + `static/`**: the web page (Leaflet map with OpenStreetMap tiles).
 - **`tests/`**: automated tests that use a pretend iPhone. Run them with `.venv/bin/pip install pytest && .venv/bin/python -m pytest`.
 
-The web app only listens on `127.0.0.1`, so nobody else on your Wi-Fi can open it.
+- **`install-app.sh`** + **`assets/AppIcon.png`**: build the Location Jump.app launcher (which runs `start.sh --background`).
+
+The web app only listens on `127.0.0.1`, so nobody else on your Wi-Fi can open it. It also refuses requests that other websites might try to send to it from your browser: every change must come from its own page as JSON, and requests addressed to any host other than `localhost` are rejected.

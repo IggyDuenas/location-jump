@@ -125,14 +125,14 @@ def test_set_location_rejects_bad_input(client, payload):
 
 
 def test_random_location_uses_a_known_place(client, controller):
-    body = client.post("/api/random").get_json()
+    body = client.post("/api/random", json={}).get_json()
     assert (body["label"], *body["anchor"]) in PLACES
     assert controller.fake_sim.calls[-1][0] == "set"
 
 
 def test_reset_clears_and_disconnects(client, controller):
     client.post("/api/location", json={"lat": 1, "lon": 2})
-    body = client.post("/api/reset").get_json()
+    body = client.post("/api/reset", json={}).get_json()
     assert not body["simulating"] and body["current"] is None
     assert controller.fake_sim.calls[-1] == ("clear",)
     assert controller._sim is None
@@ -284,7 +284,7 @@ def test_status_reports_reconnecting(client, fast):
 
 def test_setting_locations_adds_recents(client, saved):
     client.post("/api/location", json={"lat": 1, "lon": 2, "label": "  Somewhere   nice "})
-    client.post("/api/random")
+    client.post("/api/random", json={})
     recents = client.get("/api/saved").get_json()["recents"]
     assert len(recents) == 2
     assert (recents[0]["name"], recents[0]["lat"], recents[0]["lon"]) in PLACES
@@ -316,13 +316,13 @@ def test_favorites_api(client):
     client.post("/api/favorites", json={"name": None, "lat": 40.70001, "lon": -74.0})
     assert len(client.get("/api/saved").get_json()["favorites"]) == 1
     assert client.post("/api/favorites", json={"lat": 999, "lon": 0}).status_code == 400
-    assert client.delete(f"/api/favorites/{fav['id']}").get_json()["favorites"] == []
-    assert client.delete(f"/api/favorites/{fav['id']}").status_code == 404
+    assert client.delete(f"/api/favorites/{fav['id']}", json={}).get_json()["favorites"] == []
+    assert client.delete(f"/api/favorites/{fav['id']}", json={}).status_code == 404
 
 
 def test_clear_recents(client):
     client.post("/api/location", json={"lat": 1, "lon": 2})
-    assert client.delete("/api/recents").get_json()["recents"] == []
+    assert client.delete("/api/recents", json={}).get_json()["recents"] == []
 
 
 def test_saved_places_persist_and_survive_a_broken_file(tmp_path):
@@ -514,4 +514,38 @@ def test_walk_api(client, router):
     assert client.get("/api/state").get_json()["walk"]["id"] == body["walk"]["id"]
     body = client.post("/api/walk", json={"lat": 0.02, "lon": 0.02, "mode": "teleport", "follow_streets": False}).get_json()
     assert body["walk"]["mode"] == "walk" and body["walk"]["note"] == "straight"
-    assert client.post("/api/walk/stop").get_json()["walk"] is None
+    assert client.post("/api/walk/stop", json={}).get_json()["walk"] is None
+
+
+# ---------- app shell: ping, quit, and the localhost guard ----------
+
+def test_ping(client):
+    assert client.get("/api/ping").get_json()["app"] == "location-jump"
+
+
+def test_quit_resets_phone_then_stops(controller, saved, searcher, router):
+    quits = []
+    client = create_app(controller, saved, searcher, router, on_quit=lambda: quits.append(1)).test_client()
+    client.post("/api/location", json={"lat": 1, "lon": 2})
+    assert client.post("/api/quit", json={}).get_json()["ok"]
+    assert quits == [1]
+    assert controller.fake_sim.calls[-1] == ("clear",) and controller.anchor is None
+
+
+@pytest.mark.parametrize("method, path", [
+    ("post", "/api/random"), ("post", "/api/reset"), ("post", "/api/quit"), ("delete", "/api/recents"),
+])
+def test_changes_require_json_so_other_websites_cant_trigger_them(client, method, path):
+    # A plain HTML form on some other website could send exactly this.
+    r = getattr(client, method)(path, data="x=1", content_type="application/x-www-form-urlencoded")
+    assert r.status_code == 415
+    assert client.get("/api/status").get_json()["simulating"] is False
+
+
+@pytest.mark.parametrize("host, ok", [
+    ("localhost:5000", True), ("127.0.0.1:5001", True), ("[::1]:5000", True), ("localhost", True),
+    ("evil.example:5000", False), ("192.168.1.20:5000", False),
+])
+def test_only_localhost_host_header(client, host, ok):
+    r = client.get("/api/ping", headers={"Host": host})
+    assert (r.status_code == 200) is ok

@@ -8,6 +8,9 @@ import atexit
 import logging
 import os
 import random
+import signal
+import sys
+import threading
 
 from flask import Flask, jsonify, render_template, request
 
@@ -20,7 +23,15 @@ from storage import SavedPlaces
 DEFAULT_DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "saved_places.json")
 
 
-def create_app(controller=None, saved=None, searcher=None, router=None) -> Flask:
+LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
+
+
+def _stop_server() -> None:
+    # Same as pressing Ctrl+C: the server stops and atexit puts the phone back to its real location.
+    threading.Timer(0.3, lambda: os.kill(os.getpid(), signal.SIGINT)).start()
+
+
+def create_app(controller=None, saved=None, searcher=None, router=None, on_quit=_stop_server) -> Flask:
     app = Flask(__name__)
     phone = controller or PhoneController()
     saved = saved or SavedPlaces(os.environ.get("LOCATION_JUMP_DATA", DEFAULT_DATA_FILE))
@@ -30,6 +41,36 @@ def create_app(controller=None, saved=None, searcher=None, router=None) -> Flask
 
     def fail(err: PhoneError, status: int = 400):
         return jsonify(ok=False, code=err.code, error=err.message), status
+
+    @app.before_request
+    def only_this_mac():
+        """Refuse requests that other websites could make to localhost behind your back.
+
+        The Host check blocks DNS-rebinding tricks. Requiring JSON on every change means a
+        foreign page can't submit a plain form to us: browsers won't send a cross-site JSON
+        request without our permission, and we never give it.
+        """
+        host = request.host or ""
+        host = host[1:].split("]")[0] if host.startswith("[") else host.rsplit(":", 1)[0]  # drop the port
+        if host not in LOCAL_HOSTS:
+            return fail(PhoneError("Location Jump only accepts requests from this Mac.", "forbidden"), 403)
+        if request.method not in ("GET", "HEAD", "OPTIONS") and not request.is_json:
+            return fail(PhoneError("Requests must be sent from the Location Jump page.", "forbidden"), 415)
+        return None
+
+    @app.get("/api/ping")
+    def ping():
+        return jsonify(ok=True, app="location-jump")
+
+    @app.post("/api/quit")
+    def quit_app():
+        if phone.current_position() is not None:
+            try:
+                phone.clear_location()
+            except PhoneError:
+                pass  # disconnected: the phone is already on its real GPS
+        on_quit()
+        return jsonify(ok=True)
 
     def call(fn, *args, then=None):
         try:
@@ -149,6 +190,11 @@ if __name__ == "__main__":
     app = create_app()
     # Put the phone back to its real location when the app is stopped with Ctrl+C.
     atexit.register(app.config["PHONE"].shutdown)
+    # Also when macOS asks the app to stop (logging out, shutting down).
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+    # Programs started in the background (as Location Jump.app does) begin with Ctrl+C ignored,
+    # which would make the Quit button do nothing. Turn normal Ctrl+C handling back on.
+    signal.signal(signal.SIGINT, signal.default_int_handler)
     port = int(os.environ.get("PORT", "5000"))
     print(f"\n  Location Jump is running: open http://localhost:{port}\n  Press Ctrl+C to stop.\n")
     # threaded=True so a slow phone call doesn't freeze status polling; 127.0.0.1 keeps it on your Mac only.
