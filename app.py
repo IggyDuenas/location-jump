@@ -14,11 +14,12 @@ import threading
 
 from flask import Flask, jsonify, render_template, request
 
-from places import PLACES
 from phone import PhoneController, PhoneError, validate_coords
+from places import PLACES
 from routing import MODES, Router
 from search import PlaceSearch
 from storage import SavedPlaces
+from version import __version__
 
 DEFAULT_DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "saved_places.json")
 
@@ -60,7 +61,7 @@ def create_app(controller=None, saved=None, searcher=None, router=None, on_quit=
 
     @app.get("/api/ping")
     def ping():
-        return jsonify(ok=True, app="location-jump")
+        return jsonify(ok=True, app="location-jump", version=__version__)
 
     @app.post("/api/quit")
     def quit_app():
@@ -86,7 +87,7 @@ def create_app(controller=None, saved=None, searcher=None, router=None, on_quit=
 
     @app.get("/")
     def index():
-        return render_template("index.html", place_count=len(PLACES))
+        return render_template("index.html", place_count=len(PLACES), version=__version__)
 
     @app.get("/api/status")
     def status():
@@ -206,6 +207,9 @@ if __name__ == "__main__":
     # which would make the Quit button do nothing. Turn normal Ctrl+C handling back on.
     signal.signal(signal.SIGINT, signal.default_int_handler)
     port = int(os.environ.get("PORT", "5000"))
-    print(f"\n  Location Jump is running: open http://localhost:{port}\n  Press Ctrl+C to stop.\n")
-    # threaded=True so a slow phone call doesn't freeze status polling; 127.0.0.1 keeps it on your Mac only.
-    app.run(host="127.0.0.1", port=port, threaded=True, use_reloader=False)
+    print(f"\n  Location Jump {__version__} is running: open http://localhost:{port}\n  Press Ctrl+C to stop.\n",
+          flush=True)
+    # waitress is a production web server (Flask's built-in one is only for development).
+    # Several threads so a slow phone call doesn't freeze the page; 127.0.0.1 keeps it on your Mac only.
+    from waitress import serve
+    serve(app, host="127.0.0.1", port=port, threads=8, ident="Location Jump")

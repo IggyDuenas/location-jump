@@ -5,8 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Location Jump</title>
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='icon.png') }}">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
@@ -166,13 +165,12 @@
       <ul id="saved-list" class="saved-list"></ul>
     </section>
 
-    <footer class="panel-foot">{{ place_count }} famous places in the random list · runs only on this Mac</footer>
+    <footer class="panel-foot">{{ place_count }} famous places in the random list · runs only on this Mac · v{{ version }}</footer>
   </aside>
 
   <div id="message" class="toast" role="alert" hidden></div>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}"></script>
   <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>

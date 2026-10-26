@@ -12,9 +12,10 @@ from collections import OrderedDict
 import requests
 
 from phone import PhoneError
+from version import __version__
 
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
-USER_AGENT = "LocationJump/1.0 (personal hobby app; https://github.com/iggyduenas/location-jump)"
+USER_AGENT = f"LocationJump/{__version__} (personal hobby app; https://github.com/iggyduenas/location-jump)"
 MIN_INTERVAL_S = 1.0
 CACHE_SIZE = 200
 
@@ -45,9 +46,9 @@ class PlaceSearch:
                     params={"q": query, "format": "jsonv2", "limit": limit, "addressdetails": 0},
                     timeout=8,
                 )
-            except requests.RequestException:
+            except requests.RequestException as exc:
                 raise PhoneError("Couldn't reach the place search. Check your Mac's internet connection.",
-                                 "search_failed")
+                                 "search_failed") from exc
             finally:
                 self._last_request = time.monotonic()
             if resp.status_code == 429:
@@ -60,8 +61,8 @@ class PlaceSearch:
                 if not isinstance(rows, list):
                     raise ValueError("expected a list")
                 results = [self._format(r) for r in rows]
-            except (ValueError, KeyError, TypeError, AttributeError):
-                raise PhoneError("Place search sent back something unexpected. Try again.", "search_failed")
+            except (ValueError, KeyError, TypeError, AttributeError) as exc:
+                raise PhoneError("Place search sent back something unexpected. Try again.", "search_failed") from exc
             self._cache[key] = results
             if len(self._cache) > CACHE_SIZE:
                 self._cache.popitem(last=False)
