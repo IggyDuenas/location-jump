@@ -2,6 +2,7 @@
 import asyncio
 import os
 import sys
+import time
 
 import pytest
 
@@ -10,6 +11,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import phone  # noqa: E402
 from app import create_app  # noqa: E402
 from places import PLACES  # noqa: E402
+from storage import SavedPlaces  # noqa: E402
 from pymobiledevice3 import exceptions as pmd_exc  # noqa: E402
 
 
@@ -31,6 +33,8 @@ def controller(monkeypatch):
     opens = {"n": 0}
 
     async def fake_open():
+        if c.unplugged:
+            raise pmd_exc.NoDeviceConnectedError()
         opens["n"] += 1
         c._sim = sim
         return sim
@@ -47,13 +51,34 @@ def controller(monkeypatch):
     monkeypatch.setattr(c, "_open_session", fake_open)
     monkeypatch.setattr(c, "_close_session", fake_close)
     monkeypatch.setattr(c, "_status", fake_status)
-    c.fake_sim, c.opens = sim, opens
+    c.fake_sim, c.opens, c.unplugged = sim, opens, False
     return c
 
 
+class FakeSearch:
+    def __init__(self):
+        self.queries = []
+
+    def search(self, q):
+        self.queries.append(q)
+        if q == "boom":
+            raise phone.PhoneError("Couldn't reach the place search.", "search_failed")
+        return [{"name": "Eiffel Tower", "detail": "Paris, France", "lat": 48.8584, "lon": 2.2945}]
+
+
 @pytest.fixture
-def client(controller):
-    return create_app(controller).test_client()
+def saved(tmp_path):
+    return SavedPlaces(str(tmp_path / "saved.json"))
+
+
+@pytest.fixture
+def searcher():
+    return FakeSearch()
+
+
+@pytest.fixture
+def client(controller, saved, searcher):
+    return create_app(controller, saved, searcher).test_client()
 
 
 def test_places_list_is_big_and_valid():
@@ -175,3 +200,191 @@ def test_explain(exc, code):
 def test_offset_meters_is_accurate():
     lat, lon = phone.offset_meters(40.0, -74.0, 3.0, 4.0)
     assert abs(phone.distance_m(40.0, -74.0, lat, lon) - 5.0) < 0.05
+
+
+# ---------- auto-reconnect ----------
+
+def wait_until(controller, predicate, timeout=6.0):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if predicate():
+            return True
+        controller.run(asyncio.sleep(0.05))
+    return False
+
+
+@pytest.fixture
+def fast(controller, monkeypatch):
+    monkeypatch.setattr(controller, "KEEPALIVE_S", 0.1)
+    monkeypatch.setattr(controller, "RETRY_S", 0.1)
+    return controller
+
+
+def test_keepalive_resends_location(fast):
+    fast.set_location(1.0, 2.0)
+    assert wait_until(fast, lambda: len(fast.fake_sim.calls) >= 3)
+    assert all(call == ("set", 1.0, 2.0) for call in fast.fake_sim.calls)
+
+
+def test_reconnects_and_restores_location_after_unplug(fast):
+    fast.set_location(48.8584, 2.2945, "Eiffel Tower, Paris")
+    fast.unplugged = True
+    fast._sim = None  # the old connection died with the cable
+    assert wait_until(fast, lambda: fast.reconnecting)
+    state = fast._state()
+    assert state["simulating"] and state["anchor"] == [48.8584, 2.2945]
+    assert "Reconnecting automatically" in state["last_error"] and "Eiffel Tower" in state["last_error"]
+    assert fast._mounted_for is None  # will remount the Developer Disk Image if the phone rebooted
+
+    calls_before = len(fast.fake_sim.calls)
+    fast.unplugged = False
+    assert wait_until(fast, lambda: not fast.reconnecting)
+    assert fast.fake_sim.calls[calls_before] == ("set", 48.8584, 2.2945)
+    assert fast._state()["last_error"] is None
+
+
+def test_reset_while_reconnecting_just_stops(fast):
+    fast.set_location(1.0, 2.0)
+    fast.unplugged = True
+    fast._sim = None
+    assert wait_until(fast, lambda: fast.reconnecting)
+    state = fast.clear_location()  # must not fail: the phone is already on its real GPS
+    assert not state["simulating"] and not state["reconnecting"]
+    calls = len(fast.fake_sim.calls)
+    fast.unplugged = False
+    fast.run(asyncio.sleep(0.4))
+    assert len(fast.fake_sim.calls) == calls  # nothing re-applied after reset
+
+
+def test_status_reports_reconnecting(client, fast):
+    client.post("/api/location", json={"lat": 1, "lon": 2})
+    fast.unplugged = True
+    fast._sim = None
+    assert wait_until(fast, lambda: fast.reconnecting)
+    assert client.get("/api/status").get_json()["reconnecting"] is True
+
+
+# ---------- favorites & recents ----------
+
+def test_setting_locations_adds_recents(client, saved):
+    client.post("/api/location", json={"lat": 1, "lon": 2, "label": "  Somewhere   nice "})
+    client.post("/api/random")
+    recents = client.get("/api/saved").get_json()["recents"]
+    assert len(recents) == 2
+    assert (recents[0]["name"], recents[0]["lat"], recents[0]["lon"]) in PLACES
+    assert recents[1]["name"] == "Somewhere nice"
+
+
+def test_failed_set_is_not_added_to_recents(client, controller):
+    controller.unplugged = True
+    assert client.post("/api/location", json={"lat": 1, "lon": 2}).status_code == 503
+    assert client.get("/api/saved").get_json()["recents"] == []
+
+
+def test_recents_dedupe_and_cap(saved):
+    for i in range(20):
+        saved.add_recent(f"P{i}", float(i), 0.0)
+    assert [r["name"] for r in saved.all()["recents"]][:2] == ["P19", "P18"]  # newest first
+    saved.add_recent(None, 10.00001, 0.0)  # same spot as P10, within a few meters
+    recents = saved.all()["recents"]
+    assert len(recents) == 12
+    assert recents[0]["name"] == "P10"  # moved to the top, kept its name
+    assert [r["name"] for r in recents].count("P10") == 1
+
+
+def test_favorites_api(client):
+    r = client.post("/api/favorites", json={"name": "Office", "lat": 40.7, "lon": -74.0})
+    fav = r.get_json()["favorite"]
+    assert r.status_code == 200 and fav["name"] == "Office"
+    # Saving the same spot again doesn't duplicate it.
+    client.post("/api/favorites", json={"name": None, "lat": 40.70001, "lon": -74.0})
+    assert len(client.get("/api/saved").get_json()["favorites"]) == 1
+    assert client.post("/api/favorites", json={"lat": 999, "lon": 0}).status_code == 400
+    assert client.delete(f"/api/favorites/{fav['id']}").get_json()["favorites"] == []
+    assert client.delete(f"/api/favorites/{fav['id']}").status_code == 404
+
+
+def test_clear_recents(client):
+    client.post("/api/location", json={"lat": 1, "lon": 2})
+    assert client.delete("/api/recents").get_json()["recents"] == []
+
+
+def test_saved_places_persist_and_survive_a_broken_file(tmp_path):
+    path = str(tmp_path / "saved.json")
+    SavedPlaces(path).add_favorite("Home", 1.0, 2.0)
+    assert SavedPlaces(path).all()["favorites"][0]["name"] == "Home"
+    with open(path, "w") as f:
+        f.write("{not json")
+    assert SavedPlaces(path).all() == {"favorites": [], "recents": []}
+    assert os.path.exists(path + ".broken")
+
+
+# ---------- place search ----------
+
+def test_search_endpoint(client, searcher):
+    body = client.get("/api/search?q=eiffel").get_json()
+    assert body["results"][0]["name"] == "Eiffel Tower"
+    assert searcher.queries == ["eiffel"]
+    r = client.get("/api/search?q=boom")
+    assert r.status_code == 502 and "place search" in r.get_json()["error"]
+
+
+class FakeResponse:
+    def __init__(self, status, payload):
+        self.status_code, self._payload = status, payload
+        self.ok = 200 <= status < 300
+
+    def json(self):
+        return self._payload
+
+
+class FakeSession:
+    def __init__(self, responses):
+        self.headers, self.calls, self.responses = {}, [], list(responses)
+
+    def get(self, url, params=None, timeout=None):
+        self.calls.append((time.monotonic(), params))
+        r = self.responses.pop(0)
+        if isinstance(r, Exception):
+            raise r
+        return r
+
+
+NOMINATIM_ROW = {"name": "Eiffel Tower", "display_name": "Eiffel Tower, Avenue Anatole France, Paris, France",
+                 "lat": "48.8582599", "lon": "2.2945006"}
+
+
+def test_place_search_formats_caches_and_rate_limits():
+    from search import PlaceSearch, USER_AGENT
+    session = FakeSession([FakeResponse(200, [NOMINATIM_ROW]), FakeResponse(200, [])])
+    s = PlaceSearch(session)
+    assert session.headers["User-Agent"] == USER_AGENT
+    first = s.search("  Eiffel   tower ")
+    assert first == [{"name": "Eiffel Tower", "detail": "Avenue Anatole France, Paris, France",
+                      "lat": 48.8582599, "lon": 2.2945006}]
+    assert s.search("eiffel tower") == first  # cached: no second request
+    assert len(session.calls) == 1
+    assert s.search("nowhere at all") == []
+    assert session.calls[1][0] - session.calls[0][0] >= 0.95  # at most one request per second
+    assert s.search("x") == []  # too short, no request
+    assert len(session.calls) == 2
+
+
+@pytest.mark.parametrize("response, text", [
+    (FakeResponse(429, None), "busy"),
+    (FakeResponse(500, None), "error 500"),
+    (FakeResponse(200, {"oops": 1}), "unexpected"),
+])
+def test_place_search_errors(response, text):
+    from search import PlaceSearch
+    with pytest.raises(phone.PhoneError) as info:
+        PlaceSearch(FakeSession([response])).search("paris")
+    assert text in info.value.message
+
+
+def test_place_search_offline():
+    import requests
+    from search import PlaceSearch
+    with pytest.raises(phone.PhoneError) as info:
+        PlaceSearch(FakeSession([requests.ConnectionError()])).search("paris")
+    assert "internet" in info.value.message

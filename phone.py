@@ -126,6 +126,8 @@ class PhoneController:
     DRIFT_INTERVAL_S = 5.0     # how often the location wiggles
     DRIFT_RADIUS_M = 8.0       # max distance from the chosen point
     DRIFT_STEP_M = 3.0         # max distance per wiggle
+    KEEPALIVE_S = 4.0          # how often we re-send the location to notice a dropped connection
+    RETRY_S = 3.0              # how often we try to reconnect after a drop
 
     def __init__(self) -> None:
         self._loop = asyncio.new_event_loop()
@@ -136,13 +138,15 @@ class PhoneController:
         self._sim: Optional[LocationSimulation] = None
         self._udid: Optional[str] = None
         self._mounted_for: Optional[str] = None
-        self._drift_task: Optional[asyncio.Task] = None
+        self._maintain_task: Optional[asyncio.Task] = None
+        self._wake: Optional[asyncio.Event] = None
 
         # State reported to the UI
         self.anchor: Optional[tuple[float, float]] = None   # the point the user chose
         self.current: Optional[tuple[float, float]] = None  # what the phone is showing (incl. drift)
         self.label: Optional[str] = None
         self.drift_enabled = False
+        self.reconnecting = False   # lost the phone while simulating; retrying in the background
         self.last_error: Optional[str] = None
 
     # ---------- blocking API used by Flask ----------
@@ -183,6 +187,7 @@ class PhoneController:
             "current": list(self.current) if self.current else None,
             "label": self.label,
             "drift": self.drift_enabled,
+            "reconnecting": self.reconnecting,
             "last_error": self.last_error,
         }
 
@@ -317,10 +322,20 @@ class PhoneController:
                 self.last_error = err.message
                 raise err
             self.anchor, self.label = (lat, lon), label
+            self.reconnecting = False
+        self._ensure_maintainer()
         return self._state()
 
     async def _clear_location(self) -> dict:
         async with self._get_lock():
+            if self.reconnecting:
+                # The connection is already gone, so the phone is back on its real GPS.
+                # Just stop trying to restore the fake location.
+                self.anchor = self.current = self.label = None
+                self.reconnecting = False
+                self.last_error = None
+                await self._close_session()
+                return self._state()
             try:
                 # Clear even if we don't think we're simulating, in case an old session left one behind.
                 sim = await self._open_session()
@@ -332,22 +347,20 @@ class PhoneController:
                 raise err
             finally:
                 self.anchor = self.current = self.label = None
+                self.reconnecting = False
             await self._close_session()
             self.last_error = None
         return self._state()
 
     async def _set_drift(self, enabled: bool) -> dict:
-        self.drift_enabled = bool(enabled)
-        if self.drift_enabled and (self._drift_task is None or self._drift_task.done()):
-            self._drift_task = asyncio.ensure_future(self._drift_loop())
-        elif not self.drift_enabled and self._drift_task is not None:
-            self._drift_task.cancel()
-            self._drift_task = None
+        was_enabled, self.drift_enabled = self.drift_enabled, bool(enabled)
+        if self._wake is not None:
+            self._wake.set()  # start (or stop) drifting now, not after the current wait
+        if was_enabled and not self.drift_enabled and self.anchor is not None and not self.reconnecting:
             # Snap back to the exact chosen point.
-            if self.anchor is not None:
-                async with self._get_lock():
-                    with contextlib.suppress(Exception):
-                        await self._push(*self.anchor)
+            async with self._get_lock():
+                with contextlib.suppress(Exception):
+                    await self._push(*self.anchor)
         return self._state()
 
     def _next_drift_point(self) -> tuple[float, float]:
@@ -364,18 +377,50 @@ class PhoneController:
         # Wandered to the edge: step back toward the anchor.
         return (clat + alat) / 2, (clon + alon) / 2
 
-    async def _drift_loop(self) -> None:
-        while True:
-            await asyncio.sleep(self.DRIFT_INTERVAL_S + random.uniform(-1.0, 1.0))
-            if self.anchor is None:
-                continue
+    def _ensure_maintainer(self) -> None:
+        if self._wake is None:
+            self._wake = asyncio.Event()
+        if self._maintain_task is None or self._maintain_task.done():
+            self._maintain_task = asyncio.ensure_future(self._maintain_loop())
+
+    async def _maintain_loop(self) -> None:
+        """Runs while a location is set: drifts it, keeps the connection alive, and auto-reconnects.
+
+        Re-sending the location every few seconds is how we notice the phone went away (unplugged,
+        locked during setup, tunnel restarted). When that happens the phone falls back to its real
+        GPS, so we keep retrying and put the fake location back as soon as the phone is reachable.
+        """
+        while self.anchor is not None:
+            if self.reconnecting:
+                delay = self.RETRY_S
+            elif self.drift_enabled:
+                delay = self.DRIFT_INTERVAL_S + random.uniform(-1.0, 1.0)
+            else:
+                delay = self.KEEPALIVE_S
+            self._wake.clear()
+            with contextlib.suppress(asyncio.TimeoutError):
+                await asyncio.wait_for(self._wake.wait(), timeout=delay)
+
             async with self._get_lock():
                 if self.anchor is None:
-                    continue
+                    break
+                target = self._next_drift_point() if self.drift_enabled else self.anchor
                 try:
-                    await self._push(*self._next_drift_point())
+                    await self._push(*target)
                 except Exception as exc:
-                    self.last_error = "Drift paused: " + explain(exc).message
+                    if not self.reconnecting:
+                        log.warning("lost the iPhone while simulating: %r", exc)
+                    self.reconnecting = True
+                    # If the phone rebooted, the Developer Disk Image has to be mounted again.
+                    self._mounted_for = None
+                    place = self.label or "your fake location"
+                    self.last_error = (f"Lost connection to your iPhone: {explain(exc).message} "
+                                       f"Reconnecting automatically; {place} will come back as soon "
+                                       "as the phone is reachable.")
+                else:
+                    if self.reconnecting:
+                        log.info("reconnected to the iPhone; location restored")
+                    self.reconnecting = False
 
 
 def distance_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:

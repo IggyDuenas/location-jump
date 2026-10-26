@@ -13,19 +13,28 @@ from flask import Flask, jsonify, render_template, request
 
 from places import PLACES
 from phone import PhoneController, PhoneError, validate_coords
+from search import PlaceSearch
+from storage import SavedPlaces
+
+DEFAULT_DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "saved_places.json")
 
 
-def create_app(controller=None) -> Flask:
+def create_app(controller=None, saved=None, searcher=None) -> Flask:
     app = Flask(__name__)
     phone = controller or PhoneController()
+    saved = saved or SavedPlaces(os.environ.get("LOCATION_JUMP_DATA", DEFAULT_DATA_FILE))
+    searcher = searcher or PlaceSearch()
     app.config["PHONE"] = phone
 
     def fail(err: PhoneError, status: int = 400):
         return jsonify(ok=False, code=err.code, error=err.message), status
 
-    def call(fn, *args):
+    def call(fn, *args, then=None):
         try:
-            return jsonify(ok=True, **fn(*args))
+            result = fn(*args)
+            if then:
+                then(result)
+            return jsonify(ok=True, **result)
         except PhoneError as err:
             return fail(err, 400 if err.code == "bad_input" else 503)
         except Exception as exc:  # e.g. a timeout waiting for the phone
@@ -40,6 +49,13 @@ def create_app(controller=None) -> Flask:
     def status():
         return call(phone.status)
 
+    def remember(state):
+        # The phone is already set at this point, so a failed save must not turn into an error.
+        try:
+            saved.add_recent(state.get("label"), *state["anchor"])
+        except Exception:
+            logging.exception("couldn't save recent place")
+
     @app.post("/api/location")
     def set_location():
         data = request.get_json(silent=True) or {}
@@ -47,12 +63,45 @@ def create_app(controller=None) -> Flask:
             lat, lon = validate_coords(data.get("lat"), data.get("lon"))
         except PhoneError as err:
             return fail(err)
-        return call(phone.set_location, lat, lon, data.get("label"))
+        label = " ".join(str(data.get("label") or "").split())[:80] or None
+        return call(phone.set_location, lat, lon, label, then=remember)
 
     @app.post("/api/random")
     def random_location():
         name, lat, lon = random.choice(PLACES)
-        return call(phone.set_location, lat, lon, name)
+        return call(phone.set_location, lat, lon, name, then=remember)
+
+    @app.get("/api/search")
+    def search():
+        try:
+            return jsonify(ok=True, results=searcher.search(request.args.get("q", "")))
+        except PhoneError as err:
+            return fail(err, 502)
+
+    @app.get("/api/saved")
+    def saved_places():
+        return jsonify(ok=True, **saved.all())
+
+    @app.post("/api/favorites")
+    def add_favorite():
+        data = request.get_json(silent=True) or {}
+        try:
+            lat, lon = validate_coords(data.get("lat"), data.get("lon"))
+        except PhoneError as err:
+            return fail(err)
+        favorite = saved.add_favorite(data.get("name"), lat, lon)
+        return jsonify(ok=True, favorite=favorite, **saved.all())
+
+    @app.delete("/api/favorites/<fav_id>")
+    def remove_favorite(fav_id):
+        if not saved.remove_favorite(fav_id):
+            return fail(PhoneError("That favorite doesn't exist anymore.", "not_found"), 404)
+        return jsonify(ok=True, **saved.all())
+
+    @app.delete("/api/recents")
+    def clear_recents():
+        saved.clear_recents()
+        return jsonify(ok=True, **saved.all())
 
     @app.post("/api/reset")
     def reset():

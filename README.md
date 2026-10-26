@@ -54,16 +54,20 @@ The script does everything for you, explaining each step as it goes:
 ## Step 4: Use it
 
 - The **status light** in the top-right should turn **green** ("Connected to *your iPhone*. Ready."). If it's yellow or red, it tells you in plain English what to fix (see Troubleshooting below).
-- **Click anywhere on the map** (or type a latitude and longitude), then press **Set Location**.
+- **Search for a place**: type a landmark, city, or street address in the search box (for example *Eiffel Tower* or *1600 Amphitheatre Parkway*), pick a result with the mouse or the arrow keys + Enter, then press **Set Location**. Search uses OpenStreetMap, so your Mac needs internet for it.
+- Or **click anywhere on the map** (or type a latitude and longitude), then press **Set Location**.
   - The **very first time**, this takes up to a minute: the tool downloads Apple's "Developer Disk Image" and installs it on your phone. After that it's instant.
 - **🎲 Random Location** jumps to a random famous place (Eiffel Tower, Shibuya Crossing, Sydney Opera House, the Pyramids, and 51 more).
 - **Natural drift** wiggles your position by a few meters every ~5 seconds, so on Snap Map you look like a real person standing around rather than a frozen pin. It never wanders more than about 8 meters from the spot you chose. Turning it off snaps you back to the exact spot.
-- **Phone is showing** shows the exact coordinates your phone is reporting right now. The red dot on the map is the same thing.
+- **Favorites and Recent** (bottom of the panel): tap the **☆** next to the place your phone is showing to save it as a favorite. Every place you jump to is added to **Recent** automatically (the last 12). Click any saved place to jump straight there. They're stored in `saved_places.json` in the project folder, so they survive restarts.
+- **Your iPhone is showing** shows the exact coordinates your phone is reporting right now. The red dot on the map is the same thing.
 - **Reset to Real Location** puts your phone back to its real GPS.
 
 **Check it worked:** open Apple Maps or Snapchat → Snap Map on the phone. Snap Map updates your Bitmoji when you open the app, so open (or re-open) Snapchat after changing location.
 
 **Keep the phone plugged in and the app running** while you want the fake location. The fake location stays only while this tool is connected. If you press **Ctrl+C** in Terminal, the tool resets your phone to its real location before quitting.
+
+**Auto-reconnect:** if the cable comes loose, the phone restarts, or the tunnel hiccups, your phone goes back to its real location for a moment. The status turns orange ("Reconnecting to iPhone…") and the app keeps retrying every few seconds. As soon as the phone is reachable again (plugged in and unlocked), your fake location is put back automatically. Press **Reset to Real Location** if you'd rather it didn't come back.
 
 ## Step 5: When you're done
 
@@ -85,6 +89,8 @@ The script does everything for you, explaining each step as it goes:
 | **The tunnel is running but hasn't reached your iPhone yet** | Keep the phone unlocked and plugged in for ~10 seconds. Still stuck? Run `./stop.sh`, then `./start.sh`. |
 | **Couldn't download the Developer Disk Image** | The first Set Location needs internet on the Mac. Check your connection and try again. |
 | **Lost the connection to the iPhone** | Usually the cable wiggled or the phone locked during setup. Just press the button again; the tool reconnects automatically. |
+| **Reconnecting to iPhone…** stays on | Plug the phone back in and unlock it. If it still doesn't recover after ~30 seconds, run `./stop.sh` then `./start.sh`, and your fake location comes back once the app reconnects. |
+| **Couldn't reach the place search** | Search needs internet on your Mac. You can still click the map or use Random. |
 | Browser shows **"403 Forbidden"** at localhost:5000 | That's the Mac's AirPlay Receiver, not this app. Use the address `start.sh` printed (probably http://localhost:5001). |
 | Phone seems stuck on a fake location | Press **Reset to Real Location**. If the tool isn't running anymore, simply **restart the iPhone**; that always restores the real GPS. |
 
@@ -100,9 +106,11 @@ Browser (map UI) ──HTTP──► Flask app (app.py) ──► phone.py ─�
 ```
 
 - **`start.sh`**: setup and launch.
-- **`app.py`**: the Flask web server and its small JSON API (`/api/status`, `/api/location`, `/api/random`, `/api/reset`, `/api/drift`).
-- **`phone.py`**: all the iPhone logic. It checks USB, trust, Developer Mode, and the tunnel in that order, so the status tells you the *first* thing that's wrong. It keeps one long-lived developer connection open, because iOS drops the simulated location when that connection closes. It also runs the drift loop.
+- **`app.py`**: the Flask web server and its small JSON API (`/api/status`, `/api/location`, `/api/random`, `/api/reset`, `/api/drift`, `/api/search`, `/api/saved`, `/api/favorites`, `/api/recents`).
+- **`phone.py`**: all the iPhone logic. It checks USB, trust, Developer Mode, and the tunnel in that order, so the status tells you the *first* thing that's wrong. It keeps one long-lived developer connection open, because iOS drops the simulated location when that connection closes. A background loop re-sends the location every few seconds (moving it slightly when drift is on), which is also how it notices a dropped connection and restores the location after reconnecting.
 - **`places.py`**: the 55 famous places for Random Location.
+- **`search.py`**: place search through OpenStreetMap's Nominatim service (rate-limited to 1 request per second and cached, per their usage policy).
+- **`storage.py`**: favorites and recents, saved to `saved_places.json`.
 - **`templates/` + `static/`**: the web page (Leaflet map with OpenStreetMap tiles).
 - **`tests/`**: automated tests that use a pretend iPhone. Run them with `.venv/bin/pip install pytest && .venv/bin/python -m pytest`.
 
