@@ -560,3 +560,118 @@ def test_tunnel_hint_depends_on_the_service(monkeypatch, tmp_path):
     monkeypatch.setattr(phone, "TUNNEL_SERVICE_PLIST", str(plist))
     msg = phone.explain(pmd_exc.TunneldConnectionError()).message
     assert "tunnel-service.sh restart" in msg and "password" not in msg
+
+
+# ---------- Wi-Fi mode / device discovery ----------
+
+class FakeMuxDevice:
+    def __init__(self, serial, connection_type):
+        self.serial, self.connection_type = serial, connection_type
+
+
+class FakeLockdown:
+    instances = []
+
+    def __init__(self, serial, connection_type, wifi=False):
+        self.serial, self.connection_type, self.wifi = serial, connection_type, wifi
+        self.product_version = "18.1"
+        FakeLockdown.instances.append(self)
+
+    async def get_value(self, domain=None, key=None):
+        return "Iggy's iPhone"
+
+    async def get_developer_mode_status(self):
+        return True
+
+    async def get_enable_wifi_connections(self):
+        return self.wifi
+
+    async def set_enable_wifi_connections(self, value):
+        self.wifi = value
+
+    async def close(self):
+        pass
+
+
+@pytest.fixture
+def devices(monkeypatch):
+    """Control what macOS and tunneld can see."""
+    world = {"mux": [], "tunnels": {}, "wifi": False, "rsd_asked": []}
+    FakeLockdown.instances = []
+
+    async def list_devices():
+        return world["mux"]
+
+    async def create_using_usbmux(serial=None, connection_type=None, pair_timeout=None, **kw):
+        return FakeLockdown(serial, connection_type, world["wifi"])
+
+    async def tunnels():
+        return world["tunnels"]
+
+    async def rsd_by_udid(udid):
+        world["rsd_asked"].append(udid)
+        return None
+
+    monkeypatch.setattr(phone, "list_devices", list_devices)
+    monkeypatch.setattr(phone, "create_using_usbmux", create_using_usbmux)
+    monkeypatch.setattr(phone, "get_tunneld_tunnels", tunnels)
+    monkeypatch.setattr(phone, "get_tunneld_device_by_udid", rsd_by_udid)
+    return world
+
+
+def test_prefers_usb_when_the_phone_is_on_both(devices):
+    devices["mux"] = [FakeMuxDevice("ABC", "Network"), FakeMuxDevice("ABC", "USB")]
+    devices["tunnels"] = {"ABC": [{}]}
+    s = phone.PhoneController().status()
+    assert s["ready"] and s["device"]["connection"] == "usb"
+    assert FakeLockdown.instances[-1].connection_type == "USB"
+
+
+def test_ready_over_wifi(devices):
+    devices["mux"] = [FakeMuxDevice("ABC", "Network")]
+    devices["tunnels"] = {"ABC": [{}]}
+    devices["wifi"] = True
+    s = phone.PhoneController().status()
+    assert s["ready"] and s["device"]["connection"] == "wifi" and "over Wi-Fi" in s["message"]
+    assert FakeLockdown.instances[-1].connection_type == "Network"
+
+
+def test_wifi_tunnel_that_macos_does_not_list(devices):
+    devices["tunnels"] = {"XYZ": [{}]}
+    s = phone.PhoneController().status()
+    assert s["ready"] and s["device"]["connection"] == "wifi"
+
+
+def test_not_connected_mentions_wifi_mode(devices):
+    s = phone.PhoneController().status()
+    assert not s["connected"] and s["code"] == "not_connected" and "Wi-Fi mode" in s["message"]
+
+
+def test_tunnel_ids_match_with_or_without_dashes(devices):
+    devices["mux"] = [FakeMuxDevice("00008110001A2B3C", "USB")]
+    devices["tunnels"] = {"00008110-001A2B3C": [{}]}
+    c = phone.PhoneController()
+    assert c.status()["ready"]
+    with pytest.raises(phone.PhoneError) as info:
+        c.set_location(1, 2)
+    assert info.value.code == "tunnel_waiting"
+    assert devices["rsd_asked"][0] == "00008110-001A2B3C"  # asked tunneld with its own spelling
+
+
+def test_tunnel_waiting_over_wifi_says_so(devices):
+    devices["mux"] = [FakeMuxDevice("ABC", "Network")]
+    s = phone.PhoneController().status()
+    assert s["code"] == "tunnel_waiting" and "same Wi-Fi network" in s["message"]
+
+
+def test_set_wifi_needs_usb_and_flips_the_setting(devices, saved, searcher, router):
+    c = phone.PhoneController()
+    client = create_app(c, saved, searcher, router).test_client()
+    devices["mux"] = [FakeMuxDevice("ABC", "Network")]
+    r = client.post("/api/wifi", json={"enabled": False})
+    assert r.status_code == 503 and r.get_json()["code"] == "needs_usb"
+    devices["mux"] = [FakeMuxDevice("ABC", "USB")]
+    devices["tunnels"] = {"ABC": [{}]}
+    client.post("/api/wifi", json={"enabled": True})
+    flipped = [lk for lk in FakeLockdown.instances if lk.wifi]
+    assert flipped and flipped[0].connection_type == "USB"

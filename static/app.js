@@ -433,9 +433,13 @@ function renderStatus(s) {
   const box = $("status");
   const reconnecting = s.simulating && s.reconnecting;
   box.className = "status " + (reconnecting ? "status-warn" : s.ready ? "status-ready" : s.connected ? "status-warn" : "status-bad");
-  $("status-text").textContent = reconnecting ? "Reconnecting to iPhone…"
-    : s.ready && s.device ? `${s.device.name} · iOS ${s.device.ios}`
-    : SHORT_STATUS[s.code] || "Needs attention";
+  const statusText = $("status-text");
+  if (reconnecting) statusText.textContent = "Reconnecting to iPhone…";
+  else if (s.ready && s.device) {
+    statusText.textContent = s.device.ios ? `${s.device.name} · iOS ${s.device.ios}` : s.device.name;
+    statusText.append(" ", el("span", { class: "conn" }, s.device.connection === "wifi" ? "Wi-Fi" : "USB"));
+  } else statusText.textContent = SHORT_STATUS[s.code] || "Needs attention";
+  renderWifi(s);
   box.title = s.message;
 
   // Full plain-English instructions go in the panel, where there's room to read them.
@@ -447,6 +451,40 @@ function renderStatus(s) {
   $("drift").checked = s.drift;
   renderSim(s);
 }
+
+function renderWifi(s) {
+  const d = s.connected ? s.device : null;
+  const toggle = $("wifi");
+  if (wifiBusy) return;
+  toggle.checked = !!(d && d.wifi_enabled);
+  toggle.disabled = !(d && d.connection === "usb");
+  $("wifi-hint").textContent = !d
+    ? "Use your iPhone without the cable, on the same Wi-Fi as this Mac. Plug in once to turn this on."
+    : d.connection === "wifi"
+      ? "Connected over Wi-Fi. Plug in with the cable to turn this off."
+      : d.wifi_enabled
+        ? "On: you can unplug. Your iPhone stays reachable while it's awake on the same Wi-Fi as this Mac."
+        : "Use your iPhone without the cable, on the same Wi-Fi as this Mac.";
+}
+
+let wifiBusy = false;
+$("wifi").addEventListener("change", async (e) => {
+  wifiBusy = true;
+  e.target.disabled = true;
+  try {
+    const s = await api("/api/wifi", { enabled: e.target.checked });
+    wifiBusy = false;
+    renderStatus(s);
+    showMessage(e.target.checked
+      ? "Wi-Fi mode is on. You can unplug: your iPhone reconnects over Wi-Fi within about a minute (keep it unlocked the first time)."
+      : "Wi-Fi mode is off. Location Jump will only use the cable.", "success");
+  } catch (err) {
+    wifiBusy = false;
+    e.target.checked = !e.target.checked;
+    e.target.disabled = false;
+    showMessage(err.message, "error");
+  }
+});
 
 let polling = false;
 async function refreshStatus() {

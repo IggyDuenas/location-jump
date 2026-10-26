@@ -181,6 +181,9 @@ class PhoneController:
     def stop_walk(self) -> dict:
         return self.run(self._stop_walk())
 
+    def set_wifi(self, enabled: bool) -> dict:
+        return self.run(self._set_wifi(enabled), timeout=30)
+
     def state(self) -> dict:
         return self.run(self._get_state(), timeout=10)
 
@@ -232,29 +235,57 @@ class PhoneController:
             "path": w["map_path"], "destination": list(path.points[-1]),
         }
 
+    @staticmethod
+    async def _find_device() -> tuple[Optional[str], Optional[str]]:
+        """The phone macOS can see: (udid, "USB" or "Network"), preferring the cable."""
+        devices = await list_devices()
+        for kind in ("USB", "Network"):
+            for d in devices:
+                if d.connection_type == kind:
+                    return d.serial, kind
+        return None, None
+
+    @staticmethod
+    def _tunnel_key(udid: Optional[str], tunnels: dict) -> Optional[str]:
+        """tunneld's key for this phone (IDs may be written with or without dashes)."""
+        if not tunnels:
+            return None
+        if udid is None:
+            return next(iter(tunnels))  # a Wi-Fi tunnel macOS itself doesn't list
+        bare = udid.replace("-", "")
+        return next((k for k in tunnels if k.replace("-", "") == bare), None)
+
     async def _status(self) -> dict:
         """Check every link in the chain and report the first thing that's wrong."""
         result = {"connected": False, "ready": False, "code": "ok", "message": "", "device": None}
         result.update(self._state())
 
         try:
-            devices = [d for d in await list_devices() if d.is_usb]
+            udid, kind = await self._find_device()
         except Exception as exc:  # usbmuxd not reachable
             err = explain(exc)
             result.update(code=err.code, message=err.message)
             return result
-        if not devices:
+        if udid is None:
+            # tunneld can also reach a phone over Wi-Fi on its own (Bonjour), without macOS listing it.
+            with contextlib.suppress(Exception):
+                if await get_tunneld_tunnels():
+                    result.update(connected=True, ready=True, message="Connected to your iPhone over Wi-Fi. Ready.",
+                                  device={"name": "iPhone", "ios": None, "udid": None, "connection": "wifi",
+                                          "wifi_enabled": True})
+                    return result
             result.update(code="not_connected",
-                          message="No iPhone found. Plug it in with a USB cable and unlock it.")
+                          message="No iPhone found. Plug it in with a USB cable and unlock it (or, with Wi-Fi mode "
+                                  "on, keep it unlocked on the same Wi-Fi network as this Mac).")
             return result
 
-        udid = devices[0].serial
         try:
-            lockdown = await create_using_usbmux(serial=udid, pair_timeout=1)
+            lockdown = await create_using_usbmux(serial=udid, connection_type=kind, pair_timeout=1)
             try:
                 name = await lockdown.get_value(key="DeviceName")
                 version = lockdown.product_version
                 dev_mode = await lockdown.get_developer_mode_status()
+                wifi_enabled = await lockdown.get_enable_wifi_connections()
             finally:
                 with contextlib.suppress(Exception):
                     await lockdown.close()
@@ -264,7 +295,8 @@ class PhoneController:
             return result
 
         result["connected"] = True
-        result["device"] = {"name": name, "ios": version, "udid": udid}
+        result["device"] = {"name": name, "ios": version, "udid": udid,
+                            "connection": "usb" if kind == "USB" else "wifi", "wifi_enabled": wifi_enabled}
 
         if int(str(version).split(".")[0]) < 17:
             result.update(code="old_ios", message=f"This tool is built for iOS 17+, but this phone runs iOS {version}.")
@@ -280,14 +312,36 @@ class PhoneController:
             err = explain(exc)
             result.update(code=err.code, message=err.message)
             return result
-        if udid not in tunnels:
+        if self._tunnel_key(udid, tunnels) is None:
+            how = "plugged in" if kind == "USB" else "on the same Wi-Fi network"
             result.update(code="tunnel_waiting",
-                          message="The tunnel is running but hasn't reached your iPhone yet. Keep the "
-                                  "phone unlocked and plugged in; this usually takes a few seconds.")
+                          message=f"The tunnel is running but hasn't reached your iPhone yet. Keep the phone "
+                                  f"unlocked and {how}; this usually takes a few seconds"
+                                  f"{'' if kind == 'USB' else ' (up to a minute over Wi-Fi)'}.")
             return result
 
-        result.update(ready=True, message=f"Connected to {name} (iOS {version}). Ready.")
+        via = "" if kind == "USB" else " over Wi-Fi"
+        result.update(ready=True, message=f"Connected to {name} (iOS {version}){via}. Ready.")
         return result
+
+    async def _set_wifi(self, enabled: bool) -> dict:
+        """Turn "Show this iPhone when on Wi-Fi" on or off. Apple only allows changing it over USB."""
+        udid, kind = await self._find_device()
+        if kind != "USB":
+            raise PhoneError("Plug your iPhone in with the cable to change Wi-Fi mode (it can only be switched "
+                             "over USB).", "needs_usb")
+        try:
+            lockdown = await create_using_usbmux(serial=udid, connection_type="USB", pair_timeout=1)
+            try:
+                await lockdown.set_enable_wifi_connections(bool(enabled))
+            finally:
+                with contextlib.suppress(Exception):
+                    await lockdown.close()
+        except PhoneError:
+            raise
+        except Exception as exc:
+            raise explain(exc)
+        return await self._status()
 
     async def _close_session(self) -> None:
         stack, self._stack, self._sim = self._stack, None, None
@@ -300,16 +354,16 @@ class PhoneController:
         if self._sim is not None:
             return self._sim
 
-        devices = [d for d in await list_devices() if d.is_usb]
-        if not devices:
+        udid, _kind = await self._find_device()
+        key = self._tunnel_key(udid, await get_tunneld_tunnels())
+        if udid is None and key is None:
             raise pmd_exc.NoDeviceConnectedError()
-        udid = devices[0].serial
 
-        rsd = await get_tunneld_device_by_udid(udid)
+        rsd = await get_tunneld_device_by_udid(key) if key else None
         if rsd is None:
             raise PhoneError(
-                "The tunnel is running but isn't connected to your iPhone yet. Keep it unlocked and "
-                "plugged in, wait a few seconds, then try again. If this keeps happening, restart the "
+                "The tunnel is running but isn't connected to your iPhone yet. Keep it unlocked (and "
+                "plugged in, or on the same Wi-Fi in Wi-Fi mode), wait a few seconds, then try again. If this keeps happening, restart the "
                 "tunnel: ./stop.sh then ./start.sh (or ./tunnel-service.sh restart if you installed the "
                 "tunnel service).",
                 "tunnel_waiting",
@@ -318,20 +372,20 @@ class PhoneController:
         stack = contextlib.AsyncExitStack()
         try:
             await stack.enter_async_context(rsd)
-            if self._mounted_for != udid:
+            if self._mounted_for != key:
                 # Location simulation needs the Developer Disk Image mounted. This downloads it the
                 # first time (needs internet) and is a no-op if it's already mounted.
                 try:
                     await auto_mount(rsd)
                 except pmd_exc.AlreadyMountedError:
                     pass
-                self._mounted_for = udid
+                self._mounted_for = key
             dvt = await stack.enter_async_context(DvtProvider(rsd))
             sim = await stack.enter_async_context(LocationSimulation(dvt))
         except BaseException:
             await stack.aclose()
             raise
-        self._stack, self._sim, self._udid = stack, sim, udid
+        self._stack, self._sim, self._udid = stack, sim, key
         return sim
 
     async def _push(self, lat: float, lon: float) -> None:

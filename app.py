@@ -177,6 +177,11 @@ def create_app(controller=None, saved=None, searcher=None, router=None, on_quit=
     def reset():
         return call(phone.clear_location)
 
+    @app.post("/api/wifi")
+    def wifi():
+        data = request.get_json(silent=True) or {}
+        return call(phone.set_wifi, bool(data.get("enabled")))
+
     @app.post("/api/drift")
     def drift():
         data = request.get_json(silent=True) or {}
