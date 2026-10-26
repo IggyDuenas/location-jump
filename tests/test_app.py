@@ -8,11 +8,12 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+from pymobiledevice3 import exceptions as pmd_exc  # noqa: E402
+
 import phone  # noqa: E402
 from app import create_app  # noqa: E402
 from places import PLACES  # noqa: E402
 from storage import SavedPlaces  # noqa: E402
-from pymobiledevice3 import exceptions as pmd_exc  # noqa: E402
 
 
 class FakeSim:
@@ -100,7 +101,7 @@ def client(controller, saved, searcher, router):
 def test_places_list_is_big_and_valid():
     assert len(PLACES) >= 40
     assert len({p[0] for p in PLACES}) == len(PLACES)
-    for name, lat, lon in PLACES:
+    for _name, lat, lon in PLACES:
         phone.validate_coords(lat, lon)
 
 
@@ -371,7 +372,7 @@ NOMINATIM_ROW = {"name": "Eiffel Tower", "display_name": "Eiffel Tower, Avenue A
 
 
 def test_place_search_formats_caches_and_rate_limits():
-    from search import PlaceSearch, USER_AGENT
+    from search import USER_AGENT, PlaceSearch
     session = FakeSession([FakeResponse(200, [NOMINATIM_ROW]), FakeResponse(200, [])])
     s = PlaceSearch(session)
     assert session.headers["User-Agent"] == USER_AGENT
@@ -400,6 +401,7 @@ def test_place_search_errors(response, text):
 
 def test_place_search_offline():
     import requests
+
     from search import PlaceSearch
     with pytest.raises(phone.PhoneError) as info:
         PlaceSearch(FakeSession([requests.ConnectionError()])).search("paris")
@@ -427,7 +429,9 @@ def test_path_for_map_is_capped_and_keeps_the_end():
     assert len(m) <= 402 and m[0] == [0.0, 0.0] and m[-1] == [0.0, 0.2]
 
 
-ROUTE_OK = {"code": "Ok", "routes": [{"geometry": {"coordinates": [[2.2950, 48.8580], [2.2960, 48.8590], [2.3000, 48.8600]]}}]}
+ROUTE_OK = {"code": "Ok", "routes": [
+    {"geometry": {"coordinates": [[2.2950, 48.8580], [2.2960, 48.8590], [2.3000, 48.8600]]}},
+]}
 
 
 def test_router_follows_streets():
@@ -512,7 +516,8 @@ def test_walk_api(client, router):
     assert router.calls[-1] == ((0.0, 0.0), (0.01, 0.01), "bike", True)
     assert client.get("/api/saved").get_json()["recents"][0]["name"] == "Cafe"
     assert client.get("/api/state").get_json()["walk"]["id"] == body["walk"]["id"]
-    body = client.post("/api/walk", json={"lat": 0.02, "lon": 0.02, "mode": "teleport", "follow_streets": False}).get_json()
+    body = client.post("/api/walk", json={"lat": 0.02, "lon": 0.02, "mode": "teleport",
+                                           "follow_streets": False}).get_json()
     assert body["walk"]["mode"] == "walk" and body["walk"]["note"] == "straight"
     assert client.post("/api/walk/stop", json={}).get_json()["walk"] is None
 

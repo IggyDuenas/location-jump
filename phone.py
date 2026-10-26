@@ -36,7 +36,8 @@ TUNNEL_SERVICE_PLIST = "/Library/LaunchDaemons/com.github.iggyduenas.locationjum
 def tunnel_fix_hint() -> str:
     """How to get the tunnel going again, depending on whether the always-on service is installed."""
     if os.path.exists(TUNNEL_SERVICE_PLIST):
-        return "Restart the tunnel service: open Terminal in the Location Jump folder and run ./tunnel-service.sh restart"
+        return ("Restart the tunnel service: open Terminal in the Location Jump folder and run "
+                "./tunnel-service.sh restart")
     return ("Open Location Jump again (or run ./start.sh) and enter your Mac password when asked; or in Terminal "
             f"run: {TUNNEL_START_CMD}. Tip: ./tunnel-service.sh install keeps it running so you're never asked again.")
 
@@ -127,7 +128,7 @@ def validate_coords(lat: Any, lon: Any) -> tuple[float, float]:
     try:
         lat, lon = float(lat), float(lon)
     except (TypeError, ValueError):
-        raise PhoneError("Latitude and longitude must be numbers, e.g. 48.8584 and 2.2945.", "bad_input")
+        raise PhoneError("Latitude and longitude must be numbers, e.g. 48.8584 and 2.2945.", "bad_input") from None
     if math.isnan(lat) or math.isnan(lon) or not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
         raise PhoneError("Latitude must be between -90 and 90, longitude between -180 and 180.", "bad_input")
     return lat, lon
@@ -410,7 +411,7 @@ class PhoneController:
         except PhoneError:
             raise
         except Exception as exc:
-            raise explain(exc)
+            raise explain(exc) from exc
         return await self._status()
 
     async def _select_device(self, udid: Optional[str]) -> dict:
@@ -449,7 +450,8 @@ class PhoneController:
         if rsd is None:
             raise PhoneError(
                 "The tunnel is running but isn't connected to your iPhone yet. Keep it unlocked (and "
-                "plugged in, or on the same Wi-Fi in Wi-Fi mode), wait a few seconds, then try again. If this keeps happening, restart the "
+                "plugged in, or on the same Wi-Fi in Wi-Fi mode), wait a few seconds, then try again. "
+                "If this keeps happening, restart the "
                 "tunnel: ./stop.sh then ./start.sh (or ./tunnel-service.sh restart if you installed the "
                 "tunnel service).",
                 "tunnel_waiting",
@@ -505,7 +507,7 @@ class PhoneController:
             except Exception as exc:
                 err = explain(exc)
                 self.last_error = err.message
-                raise err
+                raise err from (exc if err is not exc else None)
             self.anchor, self.label = (lat, lon), label
             self.reconnecting = False
             self.walk = None
@@ -531,7 +533,7 @@ class PhoneController:
                 await self._close_session()
                 err = explain(exc)
                 self.last_error = err.message
-                raise err
+                raise err from (exc if err is not exc else None)
             finally:
                 self.anchor = self.current = self.label = None
                 self.reconnecting = False

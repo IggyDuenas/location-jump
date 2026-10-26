@@ -1,0 +1,16 @@
+# Settings for the developer tools (Location Jump itself is run with ./start.sh, not installed).
+
+[tool.ruff]
+line-length = 120
+target-version = "py39"
+extend-exclude = ["static/vendor"]
+
+[tool.ruff.lint]
+# pycodestyle, pyflakes, import order, and bugbear (likely bugs).
+select = ["E", "W", "F", "I", "B"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "phone", "places", "routing", "search", "storage", "version"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

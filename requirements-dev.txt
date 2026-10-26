@@ -1,0 +1,5 @@
+# Tools for developing Location Jump (not needed to use it).
+#   .venv/bin/pip install -r requirements-dev.txt
+pytest>=7,<10
+ruff==0.17.2
+shellcheck-py==0.11.0.1

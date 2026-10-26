@@ -1,0 +1,101 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -r requirements-dev.txt
+      - name: Python (ruff)
+        run: ruff check .
+      - name: Shell scripts (shellcheck)
+        run: shellcheck *.sh
+      - name: JavaScript syntax
+        run: node --check static/app.js
+
+  test:
+    name: Tests (Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.9 is what macOS ships with (xcode-select --install); the rest are what people install.
+        python: ["3.9", "3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: pip install -r requirements.txt -r requirements-dev.txt
+      - run: python -m pytest -q
+
+  macos:
+    name: macOS (tests, app bundle, tunnel service, start.sh)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Tests
+        run: |
+          pip install -r requirements.txt -r requirements-dev.txt
+          python -m pytest -q
+
+      - name: Build Location Jump.app
+        run: |
+          ./install-app.sh
+          APP="$HOME/Applications/Location Jump.app"
+          plutil -lint "$APP/Contents/Info.plist"
+          test -x "$APP/Contents/MacOS/LocationJump"
+          test -s "$APP/Contents/Resources/AppIcon.icns"
+          ./install-app.sh --uninstall
+          test ! -e "$APP"
+
+      # GitHub's macOS runners allow sudo without a password, so the real LaunchDaemon can be tested.
+      - name: Install the tunnel service
+        run: |
+          ./tunnel-service.sh install
+          ./tunnel-service.sh status
+          curl -fsS http://127.0.0.1:49151 && echo
+
+      - name: start.sh smoke test (no password needed with the service running)
+        run: |
+          ./start.sh > start.log 2>&1 &
+          for _ in $(seq 1 120); do
+            for port in 5000 5001; do
+              if curl -fsS "http://127.0.0.1:$port/api/ping" 2>/dev/null | grep -q location-jump; then
+                echo "App is up on port $port"
+                curl -fsS "http://127.0.0.1:$port/api/status"; echo
+                curl -fsS -X POST -H 'Content-Type: application/json' -d '{}' "http://127.0.0.1:$port/api/quit"; echo
+                exit 0
+              fi
+            done
+            sleep 2
+          done
+          echo "App never answered"; cat start.log; exit 1
+
+      - name: Remove the tunnel service
+        if: always()
+        run: |
+          ./tunnel-service.sh uninstall
+          ./tunnel-service.sh status
+
+      - name: Logs (on failure)
+        if: failure()
+        run: |
+          cat start.log || true
+          sudo cat /Library/Logs/LocationJump-tunnel.log || true

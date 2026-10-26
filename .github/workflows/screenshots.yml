@@ -1,0 +1,26 @@
+name: Screenshots
+
+# Run by hand (Actions tab > Screenshots > Run workflow) to regenerate the README images.
+# They're uploaded as the "screenshots" artifact; copy them into docs/screenshots/.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  screenshots:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: |
+          pip install -r requirements.txt playwright
+          python -m playwright install --with-deps chromium
+      - run: python scripts/screenshots.py --out screenshots
+      - uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: screenshots/*.png

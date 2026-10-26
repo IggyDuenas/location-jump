@@ -30,7 +30,7 @@ installed() { [[ -f "$PLIST" ]]; }
 
 xml_escape() { local s="${1//&/&amp;}"; s="${s//</&lt;}"; printf '%s' "${s//>/&gt;}"; }
 
-install() {
+cmd_install() {
   [[ "$(uname)" == "Darwin" ]] || die "This sets up a macOS background service, so it has to run on a Mac."
   local python="${PYTHON:-python3}"
   command -v "$python" >/dev/null 2>&1 || die "Python 3 isn't installed. Run:  xcode-select --install"
@@ -90,7 +90,7 @@ EOF
   say "Done! The tunnel now starts automatically, even after a restart. You won't be asked for your password again."
 }
 
-uninstall() {
+cmd_uninstall() {
   if ! installed; then
     echo "The tunnel service isn't installed."
     return
@@ -102,7 +102,7 @@ uninstall() {
   say "Removed. ./start.sh (or the app) will start the tunnel on demand again, asking for your password."
 }
 
-status() {
+cmd_status() {
   if installed; then
     echo "Tunnel service: installed ($PLIST)"
   else
@@ -117,7 +117,7 @@ status() {
   return 0
 }
 
-restart() {
+cmd_restart() {
   installed || die "The tunnel service isn't installed. Install it with:  ./tunnel-service.sh install"
   sudo launchctl kickstart -k "system/$LABEL"
   for _ in $(seq 1 20); do
@@ -128,9 +128,9 @@ restart() {
 }
 
 case "${1:-}" in
-  install) install ;;
-  uninstall) uninstall ;;
-  status) status ;;
-  restart) restart ;;
+  install) cmd_install ;;
+  uninstall) cmd_uninstall ;;
+  status) cmd_status ;;
+  restart) cmd_restart ;;
   *) sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
 esac
