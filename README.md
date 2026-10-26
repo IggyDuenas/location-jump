@@ -1,5 +1,11 @@
 # 📍 Location Jump
 
+[![CI](https://github.com/iggyduenas/location-jump/actions/workflows/ci.yml/badge.svg)](https://github.com/iggyduenas/location-jump/actions/workflows/ci.yml)
+![Version](https://img.shields.io/badge/version-1.0.0-6d4aff)
+![macOS](https://img.shields.io/badge/macOS-11%2B-lightgrey)
+![iOS](https://img.shields.io/badge/iOS-17%2B-lightgrey)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
 A small Mac tool that sets the GPS location of your USB-connected iPhone (iOS 17 or later) from a web page on your Mac. Pick a spot on a map, or hit **Random Location** to jump to one of 55 famous places. Your phone then reports that location to every app, including Snap Map.
 
 > **For personal fun and testing only.** While it's on, your *whole phone* thinks it's somewhere else: Snapchat, Find My, Maps, weather, and so on. Snapchat's terms don't allow location spoofing, and accounts *can* be flagged for it, so keep it to harmless jokes with people who are in on it. Press **Reset to Real Location** when you're done.
@@ -152,16 +158,32 @@ Browser (map UI) ──HTTP──► Flask app (app.py) ──► phone.py ─�
 ```
 
 - **`start.sh`**: setup and launch.
-- **`app.py`**: the Flask web server and its small JSON API (`/api/status`, `/api/location`, `/api/random`, `/api/reset`, `/api/drift`, `/api/walk`, `/api/state`, `/api/search`, `/api/saved`, `/api/favorites`, `/api/recents`).
+- **`app.py`**: the Flask app, served by waitress, and its small JSON API (`/api/status`, `/api/location`, `/api/random`, `/api/reset`, `/api/drift`, `/api/walk`, `/api/state`, `/api/search`, `/api/saved`, `/api/favorites`, `/api/recents`, `/api/device`, `/api/wifi`, `/api/ping`, `/api/quit`).
 - **`phone.py`**: all the iPhone logic. It checks USB, trust, Developer Mode, and the tunnel in that order, so the status tells you the *first* thing that's wrong. It keeps one long-lived developer connection open, because iOS drops the simulated location when that connection closes. A background loop re-sends the location every few seconds (moving it slightly when drift is on), which is also how it notices a dropped connection and restores the location after reconnecting.
 - **`places.py`**: the 55 famous places for Random Location.
 - **`search.py`**: place search through OpenStreetMap's Nominatim service (rate-limited to 1 request per second and cached, per their usage policy).
 - **`routing.py`**: walk mode: street routes from routing.openstreetmap.de and the "where are we after N meters" math.
 - **`storage.py`**: favorites and recents, saved to `saved_places.json`.
-- **`templates/` + `static/`**: the web page (Leaflet map with OpenStreetMap tiles).
-- **`tests/`**: automated tests that use a pretend iPhone. Run them with `.venv/bin/pip install pytest && .venv/bin/python -m pytest`.
+- **`templates/` + `static/`**: the web page. The map library (Leaflet) is bundled in `static/vendor/`, so the app works offline; only the map tiles, search and street routes need internet.
+- **`tests/`**: automated tests that use a pretend iPhone.
 
 - **`tunnel-service.sh`**: installs the tunnel as an always-on LaunchDaemon with its own root-owned copy of pymobiledevice3.
 - **`install-app.sh`** + **`assets/AppIcon.png`**: build the Location Jump.app launcher (which runs `start.sh --background`).
 
 The web app only listens on `127.0.0.1`, so nobody else on your Wi-Fi can open it. It also refuses requests that other websites might try to send to it from your browser: every change must come from its own page as JSON, and requests addressed to any host other than `localhost` are rejected.
+
+## For developers
+
+```bash
+.venv/bin/pip install -r requirements-dev.txt
+make check     # lint (ruff, shellcheck, JS syntax) + all tests
+make test      # just the tests
+```
+
+- **CI** (`.github/workflows/ci.yml`) runs on every push to `main` and every pull request: linting, the tests on Python 3.9 (what macOS ships), 3.11 and 3.13, and on a real macOS machine it builds the app bundle, installs and removes the tunnel service, and smoke-tests `start.sh`.
+- **Screenshots**: run the *Screenshots* workflow from the Actions tab (or `python scripts/screenshots.py` locally) to regenerate the images in `docs/screenshots/` with a pretend iPhone.
+- **Version** lives in `version.py`; changes are listed in [CHANGELOG.md](CHANGELOG.md).
+
+## License
+
+[MIT](LICENSE). The bundled Leaflet library is BSD-2-Clause (`static/vendor/leaflet/LICENSE`). Map data © OpenStreetMap contributors, map tiles © CARTO.
