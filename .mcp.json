@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "skill-issue": {
+      "type": "http",
+      "url": "https://skill-issue.in/api/mcp"
+    }
+  }
+}
