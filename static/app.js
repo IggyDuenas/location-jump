@@ -33,6 +33,8 @@ const phoneMarker = L.marker([0, 0], {
   keyboard: false,
   zIndexOffset: 1000,
 });
+const routeLine = L.polyline([], { color: "#6d4aff", weight: 5, opacity: 0.75, dashArray: "2 9", lineCap: "round" });
+let routeId = null;    // which walk the route line is drawn for
 let flownTo = null;    // last anchor we zoomed the map to
 let pickLabel = null;  // name of the picked spot, when it came from search or a saved place
 let lastState = { simulating: false };
@@ -233,8 +235,9 @@ function renderSaved() {
 
 function renderStar() {
   const star = $("btn-star");
-  star.hidden = !lastState.simulating;
-  if (!lastState.simulating) return;
+  // Hidden mid-trip: the spot is still moving. It comes back on arrival.
+  star.hidden = !lastState.simulating || !!lastState.walk;
+  if (star.hidden) return;
   const fav = favoriteAt(lastState.anchor);
   star.setAttribute("aria-pressed", String(!!fav));
   star.title = fav ? "Remove from favorites" : "Save to favorites";
@@ -275,16 +278,110 @@ $("btn-star").addEventListener("click", () => {
   else addFavorite(lastState.label, lastState.anchor[0], lastState.anchor[1]);
 });
 
+// ---------- travel (walk mode) ----------
+
+const VERBS = { walk: "Walking", jog: "Jogging", bike: "Biking", drive: "Driving" };
+let travelMode = "walk";
+try { travelMode = localStorage.getItem("travelMode") || "walk"; } catch { /* private mode */ }
+if (!VERBS[travelMode]) travelMode = "walk";
+
+function renderMode() {
+  document.querySelectorAll(".seg").forEach((b) => {
+    const on = b.dataset.mode === travelMode;
+    b.classList.toggle("active", on);
+    b.setAttribute("aria-checked", String(on));
+  });
+}
+document.querySelectorAll(".seg").forEach((b) => b.addEventListener("click", () => {
+  travelMode = b.dataset.mode;
+  try { localStorage.setItem("travelMode", travelMode); } catch { /* ignore */ }
+  renderMode();
+}));
+renderMode();
+
+function fmtDist(m) {
+  return m >= 1000 ? `${(m / 1000).toFixed(m >= 10000 ? 0 : 1)} km` : `${Math.round(m)} m`;
+}
+function fmtEta(s) {
+  if (s < 60) return "under a minute";
+  const min = Math.round(s / 60);
+  if (min < 60) return `about ${min} min`;
+  const h = Math.floor(min / 60), rest = min % 60;
+  return rest ? `about ${h} h ${rest} min` : `about ${h} h`;
+}
+
+function renderTrip(state) {
+  const walk = state.simulating ? state.walk : null;
+  $("trip").hidden = !walk;
+  $("walk-badge").hidden = !walk || state.reconnecting;
+  if (!walk) {
+    if (routeId !== null) { routeLine.remove(); routeId = null; }
+    return;
+  }
+  $("walk-badge-text").textContent = VERBS[walk.mode];
+  const pct = walk.total_m ? (walk.done_m / walk.total_m) * 100 : 100;
+  $("trip-fill").style.width = `${Math.min(pct, 100).toFixed(1)}%`;
+  $("trip-text").textContent = state.reconnecting
+    ? `Paused, ${fmtDist(walk.left_m)} left`
+    : `${fmtDist(walk.left_m)} left · ${fmtEta(walk.eta_s)}`;
+  $("trip-note").hidden = !walk.note;
+  $("trip-note").textContent = walk.note || "";
+  if (routeId !== walk.id) {
+    routeId = walk.id;
+    routeLine.setLatLngs(walk.path).addTo(map);
+    map.flyToBounds(routeLine.getBounds(), { paddingTopLeft: [60, 80], paddingBottomRight: [420, 60], maxZoom: 17, duration: 1.2 });
+  }
+}
+
+let statePoll = null;
+function followTrip(walking) {
+  // While moving, refresh the dot every second (cheap: no device checks).
+  if (walking && !statePoll) {
+    statePoll = setInterval(async () => {
+      try { renderSim(await api("/api/state")); } catch { /* the main status poll reports problems */ }
+    }, 1000);
+  } else if (!walking && statePoll) {
+    clearInterval(statePoll);
+    statePoll = null;
+  }
+}
+
+$("btn-walk").addEventListener("click", () => run($("btn-walk"), async () => {
+  const lat = parseFloat($("lat").value), lon = parseFloat($("lon").value);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+    throw new Error("Pick a destination first: search for a place or tap the map.");
+  }
+  const state = await api("/api/walk", {
+    lat, lon, label: pickLabel, mode: travelMode, follow_streets: $("follow-streets").checked,
+  });
+  renderSim(state);
+  loadSaved();
+  const w = state.walk;
+  showMessage(w.note || `${VERBS[w.mode]} to ${w.label || "your destination"}: ${fmtDist(w.total_m)}, ${fmtEta(w.eta_s)}.`,
+    w.note ? "info" : "success");
+}));
+
+$("btn-stop-walk").addEventListener("click", async () => {
+  try {
+    renderSim(await api("/api/walk/stop", {}));
+    showMessage("Stopped. Your iPhone stays where it got to.", "success");
+  } catch (e) { showMessage(e.message, "error"); }
+});
+
 // ---------- rendering ----------
 
+let wasWalking = false;
 function renderSim(state) {
   lastState = state;
+  const walking = !!(state.simulating && state.walk);
+  renderTrip(state);
+  followTrip(walking);
   const title = document.querySelector("#sim .sim-title");
   const sub = document.querySelector("#sim .sim-sub");
   $("reconnect-badge").hidden = !(state.simulating && state.reconnecting);
   // While disconnected the phone is really on its own GPS; say what will come back instead.
   $("sim-heading").textContent = state.simulating && state.reconnecting ? "Restoring when reconnected" : "Your iPhone is showing";
-  $("drift-badge").hidden = !(state.simulating && state.drift && !state.reconnecting);
+  $("drift-badge").hidden = !(state.simulating && state.drift && !state.reconnecting && !walking);
   renderStar();
   renderSaved();
   if (!state.simulating) {
@@ -292,12 +389,15 @@ function renderSim(state) {
     sub.textContent = "Nothing simulated";
     phoneMarker.remove();
     flownTo = null;
+    wasWalking = false;
     return;
   }
   const [lat, lon] = state.current || state.anchor;
   // Once the phone is at the picked spot, the pulsing dot replaces the pin.
   if (pickMarker._map && pickMarker.getLatLng().distanceTo(state.anchor) < 1) pickMarker.remove();
-  title.textContent = state.label || "Custom location";
+  title.textContent = walking
+    ? `${VERBS[state.walk.mode]} to ${state.walk.label || "destination"}`
+    : state.label || "Custom location";
   sub.textContent = `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
   phoneMarker.setLatLng([lat, lon]).addTo(map);
   phoneMarker.unbindTooltip();
@@ -306,10 +406,15 @@ function renderSim(state) {
   }
 
   const key = state.anchor.join(",");
-  if (flownTo !== key) {
+  if (walking || wasWalking) {
+    // Moving (or just arrived): keep the dot in view without re-zooming every step.
+    flownTo = key;
+    if (!map.getBounds().pad(-0.15).contains([lat, lon])) map.panTo([lat, lon]);
+  } else if (flownTo !== key) {
     flownTo = key;
     map.flyTo(state.anchor, Math.max(map.getZoom(), 16), { duration: 1.6 });
   }
+  wasWalking = walking;
 }
 
 const SHORT_STATUS = {

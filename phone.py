@@ -128,6 +128,7 @@ class PhoneController:
     DRIFT_STEP_M = 3.0         # max distance per wiggle
     KEEPALIVE_S = 4.0          # how often we re-send the location to notice a dropped connection
     RETRY_S = 3.0              # how often we try to reconnect after a drop
+    WALK_TICK_S = 1.0          # how often the location moves while walking
 
     def __init__(self) -> None:
         self._loop = asyncio.new_event_loop()
@@ -147,6 +148,7 @@ class PhoneController:
         self.label: Optional[str] = None
         self.drift_enabled = False
         self.reconnecting = False   # lost the phone while simulating; retrying in the background
+        self.walk: Optional[dict] = None  # set while moving along a route (walk mode)
         self.last_error: Optional[str] = None
 
     # ---------- blocking API used by Flask ----------
@@ -165,6 +167,25 @@ class PhoneController:
 
     def set_drift(self, enabled: bool) -> dict:
         return self.run(self._set_drift(enabled))
+
+    def start_walk(self, path, speed_mps: float, label: Optional[str], mode: str,
+                   routed: bool, note: Optional[str] = None) -> dict:
+        return self.run(self._start_walk(path, speed_mps, label, mode, routed, note))
+
+    def stop_walk(self) -> dict:
+        return self.run(self._stop_walk())
+
+    def state(self) -> dict:
+        return self.run(self._get_state(), timeout=10)
+
+    async def _get_state(self) -> dict:
+        return self._state()
+
+    def current_position(self) -> Optional[tuple[float, float]]:
+        """Where the phone is being shown right now, or None if nothing is simulated."""
+        if self.anchor is None:
+            return None
+        return self.current or self.anchor
 
     def shutdown(self) -> None:
         if self.anchor is None:
@@ -189,6 +210,20 @@ class PhoneController:
             "drift": self.drift_enabled,
             "reconnecting": self.reconnecting,
             "last_error": self.last_error,
+            "walk": self._walk_state(),
+        }
+
+    def _walk_state(self) -> Optional[dict]:
+        w = self.walk
+        if w is None:
+            return None
+        path = w["path"]
+        left = max(path.total_m - w["done_m"], 0.0)
+        return {
+            "id": w["id"], "label": w["label"], "mode": w["mode"], "routed": w["routed"], "note": w["note"],
+            "total_m": round(path.total_m, 1), "done_m": round(w["done_m"], 1),
+            "left_m": round(left, 1), "eta_s": round(left / w["speed"]),
+            "path": w["map_path"], "destination": list(path.points[-1]),
         }
 
     async def _status(self) -> dict:
@@ -323,11 +358,13 @@ class PhoneController:
                 raise err
             self.anchor, self.label = (lat, lon), label
             self.reconnecting = False
+            self.walk = None
         self._ensure_maintainer()
         return self._state()
 
     async def _clear_location(self) -> dict:
         async with self._get_lock():
+            self.walk = None
             if self.reconnecting:
                 # The connection is already gone, so the phone is back on its real GPS.
                 # Just stop trying to restore the fake location.
@@ -377,6 +414,35 @@ class PhoneController:
         # Wandered to the edge: step back toward the anchor.
         return (clat + alat) / 2, (clon + alon) / 2
 
+    async def _start_walk(self, path, speed_mps, label, mode, routed, note) -> dict:
+        if self.anchor is None:
+            raise PhoneError("Set a starting location first (Set Location or Random), then travel from there.",
+                             "bad_input")
+        self.walk = {
+            "id": random.getrandbits(32), "path": path, "map_path": path.for_map(), "speed": float(speed_mps),
+            "label": label, "mode": mode, "routed": routed, "note": note, "done_m": 0.0, "last_tick": None,
+        }
+        self.label = None
+        self._ensure_maintainer()
+        self._wake.set()  # start moving now
+        return self._state()
+
+    async def _stop_walk(self) -> dict:
+        async with self._get_lock():
+            if self.walk is not None:
+                # Stay wherever we got to.
+                self.walk = None
+                if self.current is not None:
+                    self.anchor = self.current
+        return self._state()
+
+    def _walk_step(self, walk: dict, now: float) -> tuple[float, float]:
+        """Advance along the route by the time since the last successful step."""
+        if walk["last_tick"] is not None:
+            elapsed = min(now - walk["last_tick"], 3.0)  # a slow phone call shouldn't make us jump ahead
+            walk["done_m"] = min(walk["path"].total_m, walk["done_m"] + walk["speed"] * elapsed)
+        return walk["path"].point_at(walk["done_m"])
+
     def _ensure_maintainer(self) -> None:
         if self._wake is None:
             self._wake = asyncio.Event()
@@ -393,6 +459,8 @@ class PhoneController:
         while self.anchor is not None:
             if self.reconnecting:
                 delay = self.RETRY_S
+            elif self.walk is not None:
+                delay = self.WALK_TICK_S
             elif self.drift_enabled:
                 delay = self.DRIFT_INTERVAL_S + random.uniform(-1.0, 1.0)
             else:
@@ -404,10 +472,18 @@ class PhoneController:
             async with self._get_lock():
                 if self.anchor is None:
                     break
-                target = self._next_drift_point() if self.drift_enabled else self.anchor
+                walk, now = self.walk, time.monotonic()
+                if walk is not None:
+                    target = self._walk_step(walk, now)
+                elif self.drift_enabled:
+                    target = self._next_drift_point()
+                else:
+                    target = self.anchor
                 try:
                     await self._push(*target)
                 except Exception as exc:
+                    if walk is not None:
+                        walk["last_tick"] = None  # pause the walk until we're reconnected
                     if not self.reconnecting:
                         log.warning("lost the iPhone while simulating: %r", exc)
                     self.reconnecting = True
@@ -421,6 +497,13 @@ class PhoneController:
                     if self.reconnecting:
                         log.info("reconnected to the iPhone; location restored")
                     self.reconnecting = False
+                    if walk is not None and walk is self.walk:
+                        walk["last_tick"] = now
+                        self.anchor = target
+                        if walk["done_m"] >= walk["path"].total_m:
+                            # Arrived: stay at the destination (drift/keep-alive take over from here).
+                            self.walk = None
+                            self.anchor, self.label = walk["path"].points[-1], walk["label"]
 
 
 def distance_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:

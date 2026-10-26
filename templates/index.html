@@ -39,6 +39,7 @@
         <span class="eyebrow-actions">
           <span id="drift-badge" class="live" hidden><i></i>Drifting</span>
           <span id="reconnect-badge" class="live warn" hidden><i></i>Reconnecting</span>
+          <span id="walk-badge" class="live" hidden><i></i><span id="walk-badge-text">Walking</span></span>
           <button id="btn-star" class="icon-btn" title="Save to favorites" aria-label="Save to favorites" aria-pressed="false" hidden>
             <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9L12 3.5Z"/></svg>
           </button>
@@ -47,6 +48,14 @@
       <div id="sim" class="sim">
         <div class="sim-title">Real location</div>
         <div class="sim-sub">Nothing simulated</div>
+      </div>
+      <div id="trip" class="trip" hidden>
+        <div class="trip-bar"><span id="trip-fill"></span></div>
+        <div class="trip-row">
+          <span id="trip-text"></span>
+          <button id="btn-stop-walk" class="link-btn">Stop here</button>
+        </div>
+        <p id="trip-note" class="trip-note" hidden></p>
       </div>
     </section>
 
@@ -73,6 +82,22 @@
         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M21 3 3 10.5l7 2.5 2.5 7L21 3Z"/></svg>
         <span>Set Location</span>
       </button>
+      <div class="travel">
+        <div class="divider"><span>or travel there from where you are</span></div>
+        <div class="travel-row">
+          <div class="segmented" role="radiogroup" aria-label="Travel speed">
+            <button class="seg active" data-mode="walk" role="radio" aria-checked="true" title="Walk (~5 km/h)">🚶<span>Walk</span></button>
+            <button class="seg" data-mode="jog" role="radio" aria-checked="false" title="Jog (~10 km/h)">🏃<span>Jog</span></button>
+            <button class="seg" data-mode="bike" role="radio" aria-checked="false" title="Bike (~18 km/h)">🚲<span>Bike</span></button>
+            <button class="seg" data-mode="drive" role="radio" aria-checked="false" title="Drive (~48 km/h)">🚗<span>Drive</span></button>
+          </div>
+          <button id="btn-walk" class="btn btn-secondary btn-go">
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12 4 10.6 5.4l5.6 5.6H4v2h12.2l-5.6 5.6L12 20l8-8-8-8Z"/></svg>
+            <span>Go</span>
+          </button>
+        </div>
+        <label class="check"><input id="follow-streets" type="checkbox" checked> Follow streets</label>
+      </div>
       <div class="btn-row">
         <button id="btn-random" class="btn btn-secondary" title="Jump to one of {{ place_count }} famous places">
           <span aria-hidden="true">🎲</span><span>Random Location</span>

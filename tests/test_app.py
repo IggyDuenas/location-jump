@@ -76,9 +76,25 @@ def searcher():
     return FakeSearch()
 
 
+class FakeRouter:
+    def __init__(self):
+        self.calls = []
+
+    def plan(self, start, end, mode, follow_streets=True):
+        from routing import Path
+        self.calls.append((start, end, mode, follow_streets))
+        mid = ((start[0] + end[0]) / 2 + 0.0005, (start[1] + end[1]) / 2)
+        return Path([start, mid, end]), follow_streets, None if follow_streets else "straight"
+
+
 @pytest.fixture
-def client(controller, saved, searcher):
-    return create_app(controller, saved, searcher).test_client()
+def router():
+    return FakeRouter()
+
+
+@pytest.fixture
+def client(controller, saved, searcher, router):
+    return create_app(controller, saved, searcher, router).test_client()
 
 
 def test_places_list_is_big_and_valid():
@@ -388,3 +404,114 @@ def test_place_search_offline():
     with pytest.raises(phone.PhoneError) as info:
         PlaceSearch(FakeSession([requests.ConnectionError()])).search("paris")
     assert "internet" in info.value.message
+
+
+# ---------- walk mode ----------
+
+from routing import MODES, Path, Router  # noqa: E402
+
+
+def test_path_interpolation():
+    p = Path([(0.0, 0.0), (0.0, 0.001), (0.001, 0.001)])
+    assert 220 < p.total_m < 225  # two ~111 m legs
+    assert p.point_at(-5) == (0.0, 0.0) and p.point_at(10_000) == (0.001, 0.001)
+    lat, lon = p.point_at(p.cumulative[1] / 2)
+    assert abs(lat) < 1e-9 and abs(lon - 0.0005) < 1e-9
+    lat, lon = p.point_at(p.cumulative[1] + 55.66)
+    assert abs(lon - 0.001) < 1e-9 and 0.00049 < lat < 0.00051
+
+
+def test_path_for_map_is_capped_and_keeps_the_end():
+    pts = [(0.0, i * 0.0001) for i in range(2001)]
+    m = Path(pts).for_map()
+    assert len(m) <= 402 and m[0] == [0.0, 0.0] and m[-1] == [0.0, 0.2]
+
+
+ROUTE_OK = {"code": "Ok", "routes": [{"geometry": {"coordinates": [[2.2950, 48.8580], [2.2960, 48.8590], [2.3000, 48.8600]]}}]}
+
+
+def test_router_follows_streets():
+    session = FakeSession([FakeResponse(200, ROUTE_OK)])
+    path, routed, note = Router(session).plan((48.8584, 2.2945), (48.8606, 2.3006), "walk")
+    assert routed and note is None
+    assert path.points[0] == (48.8584, 2.2945) and path.points[-1] == (48.8606, 2.3006)
+    assert path.points[1] == (48.8580, 2.2950)  # lon/lat swapped into lat/lon
+    assert len(session.calls) == 1
+
+
+@pytest.mark.parametrize("response, note", [
+    (FakeResponse(200, {"code": "NoRoute", "routes": []}), "No street route"),
+    (FakeResponse(502, "<html>"), "Couldn't reach"),
+])
+def test_router_falls_back_to_a_straight_line(response, note):
+    path, routed, msg = Router(FakeSession([response])).plan((48.0, 2.0), (48.01, 2.01), "bike")
+    assert not routed and note in msg and len(path.points) == 2
+
+
+def test_router_offline_and_skips():
+    import requests
+    path, routed, msg = Router(FakeSession([requests.ConnectionError()])).plan((48.0, 2.0), (48.01, 2.01), "drive")
+    assert not routed and "Couldn't reach" in msg
+    session = FakeSession([])
+    assert Router(session).plan((48.0, 2.0), (48.01, 2.01), "walk", follow_streets=False)[2] is None
+    assert "too far" in Router(session).plan((48.8, 2.3), (35.6, 139.7), "walk")[2]
+    assert session.calls == []
+
+
+@pytest.fixture
+def walker(fast, monkeypatch):
+    monkeypatch.setattr(fast, "WALK_TICK_S", 0.05)
+    return fast
+
+
+def test_walk_moves_along_the_path_and_arrives(walker):
+    walker.set_location(0.0, 0.0, "Start")
+    path = Path([(0.0, 0.0), (0.0, 0.001)])  # ~111 m
+    state = walker.start_walk(path, 100.0, "Finish", "walk", True)
+    assert state["walk"]["total_m"] > 100 and state["label"] is None
+    assert wait_until(walker, lambda: walker.walk is not None and 0 < walker.walk["done_m"] < path.total_m)
+    assert 0 < walker.current[1] < 0.001
+    assert wait_until(walker, lambda: walker.walk is None)
+    assert walker.anchor == (0.0, 0.001) and walker.label == "Finish"
+    sent = [c for c in walker.fake_sim.calls if c[0] == "set"]
+    lons = [c[2] for c in sent]
+    assert lons == sorted(lons)  # never moves backwards
+
+
+def test_walk_pauses_while_disconnected(walker):
+    walker.set_location(0.0, 0.0)
+    walker.start_walk(Path([(0.0, 0.0), (0.0, 0.01)]), 50.0, None, "drive", True)
+    assert wait_until(walker, lambda: walker.walk["done_m"] > 0)
+    walker.unplugged = True
+    walker._sim = None
+    assert wait_until(walker, lambda: walker.reconnecting)
+    paused_at = walker.walk["done_m"]
+    walker.run(asyncio.sleep(0.4))
+    assert walker.walk["done_m"] <= paused_at + 50 * 3.0 * 0.06  # at most one capped step, not 0.4 s of travel per tick
+    walker.unplugged = False
+    assert wait_until(walker, lambda: not walker.reconnecting and walker.walk["done_m"] > paused_at)
+
+
+def test_stop_walk_stays_put_and_set_location_cancels(walker):
+    walker.set_location(0.0, 0.0)
+    walker.start_walk(Path([(0.0, 0.0), (0.0, 0.01)]), 20.0, "Far", "walk", True)
+    assert wait_until(walker, lambda: walker.walk["done_m"] > 0)
+    state = walker.stop_walk()
+    assert state["walk"] is None and state["anchor"] == list(walker.current) and 0 < state["anchor"][1] < 0.01
+    walker.start_walk(Path([(0.0, 0.0), (0.0, 0.01)]), 20.0, "Far", "walk", True)
+    assert walker.set_location(5.0, 5.0)["walk"] is None
+
+
+def test_walk_api(client, router):
+    r = client.post("/api/walk", json={"lat": 1, "lon": 1})
+    assert r.status_code == 400 and "starting location" in r.get_json()["error"]
+    client.post("/api/location", json={"lat": 0, "lon": 0})
+    body = client.post("/api/walk", json={"lat": 0.01, "lon": 0.01, "label": "Cafe", "mode": "bike"}).get_json()
+    assert body["walk"]["mode"] == "bike" and body["walk"]["label"] == "Cafe"
+    assert body["walk"]["eta_s"] == round(body["walk"]["left_m"] / MODES["bike"][1])
+    assert router.calls[-1] == ((0.0, 0.0), (0.01, 0.01), "bike", True)
+    assert client.get("/api/saved").get_json()["recents"][0]["name"] == "Cafe"
+    assert client.get("/api/state").get_json()["walk"]["id"] == body["walk"]["id"]
+    body = client.post("/api/walk", json={"lat": 0.02, "lon": 0.02, "mode": "teleport", "follow_streets": False}).get_json()
+    assert body["walk"]["mode"] == "walk" and body["walk"]["note"] == "straight"
+    assert client.post("/api/walk/stop").get_json()["walk"] is None

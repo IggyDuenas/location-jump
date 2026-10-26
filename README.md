@@ -59,6 +59,7 @@ The script does everything for you, explaining each step as it goes:
   - The **very first time**, this takes up to a minute: the tool downloads Apple's "Developer Disk Image" and installs it on your phone. After that it's instant.
 - **🎲 Random Location** jumps to a random famous place (Eiffel Tower, Shibuya Crossing, Sydney Opera House, the Pyramids, and 51 more).
 - **Natural drift** wiggles your position by a few meters every ~5 seconds, so on Snap Map you look like a real person standing around rather than a frozen pin. It never wanders more than about 8 meters from the spot you chose. Turning it off snaps you back to the exact spot.
+- **Travel there (walk mode)**: instead of teleporting, pick a destination (search, map, or coordinates), choose **🚶 Walk**, **🏃 Jog**, **🚲 Bike** or **🚗 Drive**, and press **Go**. Your phone moves there at that speed (about 5, 10, 18 or 48 km/h), following real streets. A dashed line shows the route, and the top card shows a progress bar, the distance left, and the time remaining. Press **Stop here** to stay wherever you've got to. Turn off **Follow streets** to go in a straight line. Routes come from the free OpenStreetMap routing service; if it can't find one (for example across an ocean), the trip goes in a straight line and the app tells you. If the phone disconnects mid-trip, the trip pauses and carries on after reconnecting.
 - **Favorites and Recent** (bottom of the panel): tap the **☆** next to the place your phone is showing to save it as a favorite. Every place you jump to is added to **Recent** automatically (the last 12). Click any saved place to jump straight there. They're stored in `saved_places.json` in the project folder, so they survive restarts.
 - **Your iPhone is showing** shows the exact coordinates your phone is reporting right now. The red dot on the map is the same thing.
 - **Reset to Real Location** puts your phone back to its real GPS.
@@ -106,10 +107,11 @@ Browser (map UI) ──HTTP──► Flask app (app.py) ──► phone.py ─�
 ```
 
 - **`start.sh`**: setup and launch.
-- **`app.py`**: the Flask web server and its small JSON API (`/api/status`, `/api/location`, `/api/random`, `/api/reset`, `/api/drift`, `/api/search`, `/api/saved`, `/api/favorites`, `/api/recents`).
+- **`app.py`**: the Flask web server and its small JSON API (`/api/status`, `/api/location`, `/api/random`, `/api/reset`, `/api/drift`, `/api/walk`, `/api/state`, `/api/search`, `/api/saved`, `/api/favorites`, `/api/recents`).
 - **`phone.py`**: all the iPhone logic. It checks USB, trust, Developer Mode, and the tunnel in that order, so the status tells you the *first* thing that's wrong. It keeps one long-lived developer connection open, because iOS drops the simulated location when that connection closes. A background loop re-sends the location every few seconds (moving it slightly when drift is on), which is also how it notices a dropped connection and restores the location after reconnecting.
 - **`places.py`**: the 55 famous places for Random Location.
 - **`search.py`**: place search through OpenStreetMap's Nominatim service (rate-limited to 1 request per second and cached, per their usage policy).
+- **`routing.py`**: walk mode: street routes from routing.openstreetmap.de and the "where are we after N meters" math.
 - **`storage.py`**: favorites and recents, saved to `saved_places.json`.
 - **`templates/` + `static/`**: the web page (Leaflet map with OpenStreetMap tiles).
 - **`tests/`**: automated tests that use a pretend iPhone. Run them with `.venv/bin/pip install pytest && .venv/bin/python -m pytest`.

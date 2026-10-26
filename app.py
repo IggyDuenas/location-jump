@@ -13,17 +13,19 @@ from flask import Flask, jsonify, render_template, request
 
 from places import PLACES
 from phone import PhoneController, PhoneError, validate_coords
+from routing import MODES, Router
 from search import PlaceSearch
 from storage import SavedPlaces
 
 DEFAULT_DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "saved_places.json")
 
 
-def create_app(controller=None, saved=None, searcher=None) -> Flask:
+def create_app(controller=None, saved=None, searcher=None, router=None) -> Flask:
     app = Flask(__name__)
     phone = controller or PhoneController()
     saved = saved or SavedPlaces(os.environ.get("LOCATION_JUMP_DATA", DEFAULT_DATA_FILE))
     searcher = searcher or PlaceSearch()
+    router = router or Router()
     app.config["PHONE"] = phone
 
     def fail(err: PhoneError, status: int = 400):
@@ -49,6 +51,11 @@ def create_app(controller=None, saved=None, searcher=None) -> Flask:
     def status():
         return call(phone.status)
 
+    @app.get("/api/state")
+    def state():
+        # Just the simulation state (no device checks), for smooth updates while walking.
+        return call(phone.state)
+
     def remember(state):
         # The phone is already set at this point, so a failed save must not turn into an error.
         try:
@@ -70,6 +77,28 @@ def create_app(controller=None, saved=None, searcher=None) -> Flask:
     def random_location():
         name, lat, lon = random.choice(PLACES)
         return call(phone.set_location, lat, lon, name, then=remember)
+
+    @app.post("/api/walk")
+    def walk():
+        data = request.get_json(silent=True) or {}
+        try:
+            lat, lon = validate_coords(data.get("lat"), data.get("lon"))
+        except PhoneError as err:
+            return fail(err)
+        mode = data.get("mode") if data.get("mode") in MODES else "walk"
+        current = phone.current_position()
+        if current is None:
+            return fail(PhoneError("Set a starting location first (Set Location or Random), then travel from there.",
+                                   "bad_input"))
+        label = " ".join(str(data.get("label") or "").split())[:80] or None
+        path, routed, note = router.plan(current, (lat, lon), mode, bool(data.get("follow_streets", True)))
+        _, speed, _ = MODES[mode]
+        return call(phone.start_walk, path, speed, label, mode, routed, note,
+                    then=lambda _state: remember({"label": label, "anchor": [lat, lon]}))
+
+    @app.post("/api/walk/stop")
+    def stop_walk():
+        return call(phone.stop_walk)
 
     @app.get("/api/search")
     def search():
