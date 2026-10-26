@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Location Jump</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header>
+    <h1>📍 Location Jump</h1>
+    <div id="status" class="status status-unknown">
+      <span class="dot"></span>
+      <span id="status-text">Checking iPhone…</span>
+    </div>
+  </header>
+
+  <main>
+    <div id="map"></div>
+
+    <aside>
+      <section>
+        <h2>Pick a spot</h2>
+        <p class="hint">Click anywhere on the map, or type coordinates.</p>
+        <div class="coords">
+          <label>Latitude <input id="lat" type="number" step="any" placeholder="48.8584"></label>
+          <label>Longitude <input id="lon" type="number" step="any" placeholder="2.2945"></label>
+        </div>
+        <button id="btn-set" class="primary">Set Location</button>
+        <button id="btn-random">🎲 Random Location <small>({{ place_count }} places)</small></button>
+        <button id="btn-reset" class="danger">Reset to Real Location</button>
+      </section>
+
+      <section>
+        <label class="toggle">
+          <input id="drift" type="checkbox">
+          <span>Natural drift</span>
+        </label>
+        <p class="hint">Wiggles the location a few meters every ~5 seconds so it doesn't look frozen.</p>
+      </section>
+
+      <section>
+        <h2>Phone is showing</h2>
+        <div id="sim" class="sim">Real location (nothing simulated)</div>
+      </section>
+
+      <div id="message" class="message" hidden></div>
+    </aside>
+  </main>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
