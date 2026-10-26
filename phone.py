@@ -13,6 +13,7 @@ import asyncio
 import contextlib
 import logging
 import math
+import os
 import random
 import threading
 import time
@@ -29,6 +30,15 @@ from pymobiledevice3.usbmux import list_devices
 log = logging.getLogger(__name__)
 
 TUNNEL_START_CMD = "sudo .venv/bin/python -m pymobiledevice3 remote tunneld -d"
+TUNNEL_SERVICE_PLIST = "/Library/LaunchDaemons/com.github.iggyduenas.locationjump.tunneld.plist"
+
+
+def tunnel_fix_hint() -> str:
+    """How to get the tunnel going again, depending on whether the always-on service is installed."""
+    if os.path.exists(TUNNEL_SERVICE_PLIST):
+        return "Restart the tunnel service: open Terminal in the Location Jump folder and run ./tunnel-service.sh restart"
+    return ("Open Location Jump again (or run ./start.sh) and enter your Mac password when asked; or in Terminal "
+            f"run: {TUNNEL_START_CMD}. Tip: ./tunnel-service.sh install keeps it running so you're never asked again.")
 
 
 class PhoneError(Exception):
@@ -45,11 +55,7 @@ def explain(exc: BaseException) -> PhoneError:
     if isinstance(exc, PhoneError):
         return exc
     if isinstance(exc, pmd_exc.TunneldConnectionError):
-        return PhoneError(
-            "The iOS 17 tunnel isn't running. Open Terminal in this folder and run:  "
-            f"{TUNNEL_START_CMD}  (it will ask for your Mac password), then try again.",
-            "no_tunnel",
-        )
+        return PhoneError(f"The iOS 17 tunnel isn't running. {tunnel_fix_hint()}", "no_tunnel")
     if isinstance(exc, (pmd_exc.NoDeviceConnectedError, pmd_exc.DeviceNotFoundError,
                         pmd_exc.ConnectionFailedToUsbmuxdError)):
         return PhoneError(
@@ -304,7 +310,8 @@ class PhoneController:
             raise PhoneError(
                 "The tunnel is running but isn't connected to your iPhone yet. Keep it unlocked and "
                 "plugged in, wait a few seconds, then try again. If this keeps happening, restart the "
-                f"tunnel: sudo pkill -f 'pymobiledevice3 remote tunneld'; {TUNNEL_START_CMD}",
+                "tunnel: ./stop.sh then ./start.sh (or ./tunnel-service.sh restart if you installed the "
+                "tunnel service).",
                 "tunnel_waiting",
             )
 
