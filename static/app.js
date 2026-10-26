@@ -7,16 +7,16 @@ const $ = (id) => document.getElementById(id);
 const map = L.map("map", { worldCopyJump: true, zoomControl: false }).setView([25, 10], 3);
 L.control.zoom({ position: "topleft" }).addTo(map);
 
-// CARTO basemaps: clean light style, plus a dark one that follows the Mac's appearance setting.
-const tileUrl = (dark) =>
-  `https://{s}.basemaps.cartocdn.com/${dark ? "dark_all" : "rastertiles/voyager"}/{z}/{x}/{y}{r}.png`;
-const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
-const tiles = L.tileLayer(tileUrl(darkQuery.matches), {
-  maxZoom: 20,
-  subdomains: "abcd",
-  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+// OpenStreetMap's own tiles: free, no account or key needed. There's no official dark style,
+// so in dark mode the tiles are colour-inverted with CSS (see .dark-map in style.css).
+L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  maxZoom: 19,
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
 }).addTo(map);
-darkQuery.addEventListener("change", (e) => tiles.setUrl(tileUrl(e.matches)));
+const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
+const applyMapTheme = () => map.getContainer().classList.toggle("dark-map", darkQuery.matches);
+applyMapTheme();
+darkQuery.addEventListener("change", applyMapTheme);
 
 // The spot you picked (pin) vs. what the phone is actually showing (pulsing dot, moves with drift).
 const pickMarker = L.marker([0, 0], {

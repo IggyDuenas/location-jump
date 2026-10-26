@@ -46,6 +46,8 @@ body {
 }
 
 #map { position: fixed; inset: 0; background: var(--bg); }
+/* Dark mode map: invert the light tiles, then turn the hues back so water stays blue and parks green. */
+.dark-map .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(0.9) contrast(0.9) saturate(0.6); }
 .leaflet-control-attribution { font-size: 10px; background: var(--glass) !important; color: var(--muted); }
 .leaflet-control-attribution a { color: var(--muted); }
 .leaflet-control-zoom { border: 0 !important; box-shadow: var(--shadow) !important; border-radius: 12px !important; overflow: hidden; }

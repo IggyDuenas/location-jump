@@ -186,4 +186,4 @@ make test      # just the tests
 
 ## License
 
-[MIT](LICENSE). The bundled Leaflet library is BSD-2-Clause (`static/vendor/leaflet/LICENSE`). Map data © OpenStreetMap contributors, map tiles © CARTO.
+[MIT](LICENSE). The bundled Leaflet library is BSD-2-Clause (`static/vendor/leaflet/LICENSE`). Map data and tiles © OpenStreetMap contributors.
