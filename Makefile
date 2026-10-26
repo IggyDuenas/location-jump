@@ -10,6 +10,7 @@ lint:  ## check code style and common mistakes
 	$(PY) -m ruff check .
 	$(dir $(PY))shellcheck *.sh
 	node --check static/app.js
+	node --check site/site.js
 
 check: lint test  ## everything CI runs
 
