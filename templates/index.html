@@ -2,53 +2,93 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Location Jump</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📍</text></svg>">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
         integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-  <header>
-    <h1>📍 Location Jump</h1>
-    <div id="status" class="status status-unknown">
-      <span class="dot"></span>
-      <span id="status-text">Checking iPhone…</span>
+  <div id="map" aria-label="Map. Click to choose a location."></div>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5Z"/></svg>
+      </span>
+      <span class="brand-name">Location Jump</span>
+    </div>
+    <div id="status" class="status status-unknown" role="status" aria-live="polite">
+      <span class="dot" aria-hidden="true"></span>
+      <span id="status-text">Looking for your iPhone…</span>
     </div>
   </header>
 
-  <main>
-    <div id="map"></div>
+  <aside class="panel">
+    <div class="grabber" aria-hidden="true"></div>
 
-    <aside>
-      <section>
-        <h2>Pick a spot</h2>
-        <p class="hint">Click anywhere on the map, or type coordinates.</p>
-        <div class="coords">
-          <label>Latitude <input id="lat" type="number" step="any" placeholder="48.8584"></label>
-          <label>Longitude <input id="lon" type="number" step="any" placeholder="2.2945"></label>
-        </div>
-        <button id="btn-set" class="primary">Set Location</button>
-        <button id="btn-random">🎲 Random Location <small>({{ place_count }} places)</small></button>
-        <button id="btn-reset" class="danger">Reset to Real Location</button>
-      </section>
+    <div id="alert" class="alert" hidden>
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 2 1 21h22L12 2Zm1 15h-2v-2h2v2Zm0-4h-2V9h2v4Z"/></svg>
+      <p id="alert-text"></p>
+    </div>
 
-      <section>
-        <label class="toggle">
-          <input id="drift" type="checkbox">
-          <span>Natural drift</span>
+    <section class="card now">
+      <div class="eyebrow">
+        <span>Your iPhone is showing</span>
+        <span id="drift-badge" class="live" hidden><i></i>Drifting</span>
+      </div>
+      <div id="sim" class="sim">
+        <div class="sim-title">Real location</div>
+        <div class="sim-sub">Nothing simulated</div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="eyebrow"><span>Destination</span></div>
+      <p class="hint">Tap anywhere on the map, or enter coordinates.</p>
+      <div class="coords">
+        <label class="field">
+          <span>Latitude</span>
+          <input id="lat" type="number" step="any" inputmode="decimal" placeholder="48.8584" autocomplete="off">
         </label>
-        <p class="hint">Wiggles the location a few meters every ~5 seconds so it doesn't look frozen.</p>
-      </section>
+        <label class="field">
+          <span>Longitude</span>
+          <input id="lon" type="number" step="any" inputmode="decimal" placeholder="2.2945" autocomplete="off">
+        </label>
+      </div>
+      <button id="btn-set" class="btn btn-primary">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M21 3 3 10.5l7 2.5 2.5 7L21 3Z"/></svg>
+        <span>Set Location</span>
+      </button>
+      <div class="btn-row">
+        <button id="btn-random" class="btn btn-secondary" title="Jump to one of {{ place_count }} famous places">
+          <span aria-hidden="true">🎲</span><span>Random Location</span>
+        </button>
+        <button id="btn-reset" class="btn btn-ghost">
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12 5V2L7 6l5 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7Z"/></svg>
+          <span>Reset to Real Location</span>
+        </button>
+      </div>
+    </section>
 
-      <section>
-        <h2>Phone is showing</h2>
-        <div id="sim" class="sim">Real location (nothing simulated)</div>
-      </section>
+    <section class="card toggle-card">
+      <label class="switch-row" for="drift">
+        <span>
+          <span class="switch-title">Natural drift</span>
+          <span class="hint">Wanders a few meters every ~5 seconds so the pin doesn't look frozen.</span>
+        </span>
+        <span class="switch">
+          <input id="drift" type="checkbox" role="switch">
+          <span class="track"><span class="thumb"></span></span>
+        </span>
+      </label>
+    </section>
 
-      <div id="message" class="message" hidden></div>
-    </aside>
-  </main>
+    <footer class="panel-foot">{{ place_count }} famous places in the random list · runs only on this Mac</footer>
+  </aside>
+
+  <div id="message" class="toast" role="alert" hidden></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
           integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
