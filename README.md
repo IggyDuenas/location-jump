@@ -8,6 +8,15 @@
 
 A small Mac tool that sets the GPS location of your USB-connected iPhone (iOS 17 or later) from a web page on your Mac. Pick a spot on a map, or hit **Random Location** to jump to one of 55 famous places. Your phone then reports that location to every app, including Snap Map.
 
+![Location Jump showing the Eiffel Tower](docs/screenshots/main.png)
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/walk.png" alt="Walk mode: following streets through Central Park"><br><sub><b>Walk mode</b>: travel there along real streets</sub></td>
+    <td width="50%"><img src="docs/screenshots/dark.png" alt="Dark mode with place search"><br><sub><b>Dark mode</b> and place search</sub></td>
+  </tr>
+</table>
+
 > **For personal fun and testing only.** While it's on, your *whole phone* thinks it's somewhere else: Snapchat, Find My, Maps, weather, and so on. Snapchat's terms don't allow location spoofing, and accounts *can* be flagged for it, so keep it to harmless jokes with people who are in on it. Press **Reset to Real Location** when you're done.
 
 ---

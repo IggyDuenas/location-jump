@@ -15,6 +15,10 @@ All notable changes to Location Jump. Versions follow [semantic versioning](http
 - Served by waitress, a production web server, instead of Flask's development server.
 - Errors now keep their original cause, which makes the log more useful when something goes wrong.
 
+### Fixed
+- The map showed "API KEY REQUIRED" tiles: CARTO's tile service now requires an account. The map now uses OpenStreetMap's own tiles (no key needed), darkened with a CSS filter in dark mode.
+- README screenshots added (generated with a pretend iPhone by the Screenshots workflow).
+
 ## [0.7.0] - 2026-10-26
 ### Added
 - **Wi-Fi mode:** use the phone without the cable on the same Wi-Fi network; auto-reconnect picks the phone up over Wi-Fi after unplugging.
