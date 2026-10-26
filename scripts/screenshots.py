@@ -6,7 +6,7 @@ pictures with a headless browser. Needs internet for the map tiles and street ro
     pip install -r requirements.txt playwright && python -m playwright install chromium
     python scripts/screenshots.py            # writes docs/screenshots/
 
-The "Screenshots" GitHub Actions workflow runs this and uploads the images.
+The "Screenshots" GitHub Actions workflow runs this and commits the images.
 """
 from __future__ import annotations
 
