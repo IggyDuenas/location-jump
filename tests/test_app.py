@@ -675,3 +675,95 @@ def test_set_wifi_needs_usb_and_flips_the_setting(devices, saved, searcher, rout
     client.post("/api/wifi", json={"enabled": True})
     flipped = [lk for lk in FakeLockdown.instances if lk.wifi]
     assert flipped and flipped[0].connection_type == "USB"
+
+
+# ---------- several devices ----------
+
+def test_two_phones_and_no_choice_means_ask(devices):
+    devices["mux"] = [FakeMuxDevice("AAA", "USB"), FakeMuxDevice("BBB", "USB")]
+    devices["tunnels"] = {"AAA": [{}], "BBB": [{}]}
+    c = phone.PhoneController()
+    s = c.status()
+    assert not s["ready"] and s["code"] == "choose_device" and "2 devices" in s["message"]
+    assert [d["udid"] for d in s["devices"]] == ["AAA", "BBB"]
+    with pytest.raises(phone.PhoneError) as info:
+        c.set_location(1, 2)  # never guesses which phone to spoof
+    assert info.value.code == "choose_device"
+
+
+def test_same_phone_on_usb_and_wifi_is_listed_once(devices):
+    devices["mux"] = [FakeMuxDevice("AAA", "USB"), FakeMuxDevice("AAA", "Network")]
+    devices["tunnels"] = {"AAA": [{}]}
+    s = phone.PhoneController().status()
+    assert s["ready"] and s["device"]["connection"] == "usb"
+
+
+def test_choosing_a_phone(devices, saved, searcher, router):
+    devices["mux"] = [FakeMuxDevice("AAA", "USB"), FakeMuxDevice("BBB", "Network")]
+    devices["tunnels"] = {"AAA": [{}], "BBB": [{}]}
+    c = phone.PhoneController()
+    client = create_app(c, saved, searcher, router).test_client()
+    body = client.post("/api/device", json={"udid": "BBB"}).get_json()
+    assert body["ready"] and body["device"]["udid"] == "BBB" and body["device"]["connection"] == "wifi"
+    assert [d["selected"] for d in body["devices"]] == [False, True]
+    assert body["devices"][0]["name"] == "Iggy's iPhone" and body["devices"][0]["usb"]
+    r = client.post("/api/device", json={"udid": "ZZZ"})
+    assert r.status_code == 503 and "isn't connected" in r.get_json()["error"]
+
+
+def test_chosen_phone_missing_waits_instead_of_switching(devices):
+    devices["mux"] = [FakeMuxDevice("AAA", "USB"), FakeMuxDevice("BBB", "USB")]
+    devices["tunnels"] = {"AAA": [{}], "BBB": [{}]}
+    c = phone.PhoneController()
+    c.select_device("AAA")
+    devices["mux"] = [FakeMuxDevice("BBB", "USB")]  # the chosen phone was unplugged...
+    devices["tunnels"] = {"BBB": [{}]}               # ...so its tunnel is gone too
+    s = c.status()
+    assert s["code"] == "not_connected" and "Iggy's iPhone isn't connected" in s["message"]
+    assert c.run(c._find_device()) == (None, None)
+
+
+def test_switching_phones_resets_the_old_one_first(controller, devices):
+    devices["mux"] = [FakeMuxDevice("AAA", "USB"), FakeMuxDevice("BBB", "USB")]
+    controller.selected = "AAA"
+    controller.set_location(1.0, 2.0)
+    controller.select_device("BBB")
+    assert controller.fake_sim.calls[-1] == ("clear",)
+    assert controller.anchor is None and controller.selected == "BBB"
+
+
+def test_first_spoof_remembers_the_phone(devices, monkeypatch):
+    devices["mux"] = [FakeMuxDevice("AAA", "USB")]
+    devices["tunnels"] = {"AAA": [{}]}
+
+    class FakeRsd:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            pass
+
+    class Dvt(FakeRsd):
+        def __init__(self, rsd):
+            pass
+
+    class Sim(Dvt):
+        async def set(self, lat, lon):
+            pass
+
+    async def rsd_by_udid(udid):
+        return FakeRsd()
+
+    async def auto_mount(rsd):
+        pass
+
+    monkeypatch.setattr(phone, "get_tunneld_device_by_udid", rsd_by_udid)
+    monkeypatch.setattr(phone, "auto_mount", auto_mount)
+    monkeypatch.setattr(phone, "DvtProvider", Dvt)
+    monkeypatch.setattr(phone, "LocationSimulation", Sim)
+    c = phone.PhoneController()
+    c.set_location(1, 2)
+    assert c.selected == "AAA"
+    devices["mux"].append(FakeMuxDevice("BBB", "USB"))  # a second phone arrives mid-spoof
+    s = c.status()
+    assert s["ready"] and s["device"]["udid"] == "AAA" and len(s["devices"]) == 2

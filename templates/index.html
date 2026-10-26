@@ -19,9 +19,13 @@
       </span>
       <span class="brand-name">Location Jump</span>
     </div>
-    <div id="status" class="status status-unknown" role="status" aria-live="polite">
-      <span class="dot" aria-hidden="true"></span>
-      <span id="status-text">Looking for your iPhone…</span>
+    <div class="device-picker">
+      <button id="status" type="button" class="status status-unknown" aria-haspopup="menu" aria-expanded="false">
+        <span class="dot" aria-hidden="true"></span>
+        <span id="status-text" role="status" aria-live="polite">Looking for your iPhone…</span>
+        <svg class="caret" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="m7 10 5 5 5-5H7Z"/></svg>
+      </button>
+      <div id="device-menu" class="device-menu" role="menu" hidden></div>
     </div>
     <button id="btn-quit" class="quit" title="Quit Location Jump (puts your iPhone back to its real location)">
       <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M11 3h2v9h-2V3Zm-4.24 2.34 1.42 1.42A6 6 0 1 0 15.82 6.76l1.42-1.42A8 8 0 1 1 6.76 5.34Z"/></svg>
@@ -43,7 +47,10 @@
 
     <div id="alert" class="alert" hidden>
       <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 2 1 21h22L12 2Zm1 15h-2v-2h2v2Zm0-4h-2V9h2v4Z"/></svg>
-      <p id="alert-text"></p>
+      <div class="alert-body">
+        <p id="alert-text"></p>
+        <div id="device-choices" class="device-choices" hidden></div>
+      </div>
     </div>
 
     <section class="card now">

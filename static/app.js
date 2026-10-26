@@ -417,6 +417,59 @@ function renderSim(state) {
   wasWalking = walking;
 }
 
+// ---------- several devices ----------
+
+let devices = [];
+function deviceItem(d, onPick) {
+  const sub = el("span", { class: "d-sub" });
+  if (d.ios) sub.append(`iOS ${d.ios}`);
+  if (d.usb) sub.append(el("span", { class: "conn" }, "USB"));
+  if (d.wifi) sub.append(el("span", { class: "conn" }, "Wi-Fi"));
+  return el("button", { class: "device-item", role: "menuitemradio", "aria-checked": String(!!d.selected), onclick: () => onPick(d) },
+    el("span", { class: "d-icon", "aria-hidden": "true" }, "📱"),
+    el("span", { class: "d-text" }, el("span", { class: "d-name" }, d.name || "Device"), sub),
+    el("span", { class: "d-check", "aria-hidden": "true" }, d.selected ? "✓" : ""));
+}
+
+function renderDevices(s) {
+  devices = s.devices || [];
+  const switchable = devices.length > 1 || (devices.length === 1 && !devices[0].selected);
+  $("status").classList.toggle("switchable", switchable);
+  if (!switchable) closeDeviceMenu();
+  // When the app needs you to pick (or your pick isn't here), offer the choices right in the panel.
+  const ask = devices.length && (s.code === "choose_device" || (s.code === "not_connected" && s.selected));
+  $("device-choices").hidden = !ask;
+  if (ask) $("device-choices").replaceChildren(...devices.filter((d) => !d.selected).map((d) => deviceItem(d, chooseDevice)));
+}
+
+function closeDeviceMenu() {
+  $("device-menu").hidden = true;
+  $("status").setAttribute("aria-expanded", "false");
+}
+
+$("status").addEventListener("click", (e) => {
+  if (!$("status").classList.contains("switchable")) return;
+  e.stopPropagation();
+  const menu = $("device-menu");
+  if (!menu.hidden) { closeDeviceMenu(); return; }
+  menu.replaceChildren(el("div", { class: "menu-title" }, "Use which device?"), ...devices.map((d) => deviceItem(d, chooseDevice)));
+  menu.hidden = false;
+  $("status").setAttribute("aria-expanded", "true");
+  menu.querySelector(".device-item")?.focus();
+});
+document.addEventListener("click", (e) => { if (!e.target.closest(".device-picker")) closeDeviceMenu(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDeviceMenu(); });
+
+async function chooseDevice(d) {
+  closeDeviceMenu();
+  if (d.selected) return;
+  if (lastState.simulating && !confirm(`Switch to ${d.name}? The current device goes back to its real location.`)) return;
+  try {
+    renderStatus(await api("/api/device", { udid: d.udid }));
+    showMessage(`Now using ${d.name}.`, "success");
+  } catch (e) { showMessage(e.message, "error"); }
+}
+
 const SHORT_STATUS = {
   not_connected: "No iPhone connected",
   not_trusted: "Waiting for Trust on iPhone",
@@ -426,13 +479,15 @@ const SHORT_STATUS = {
   tunnel_waiting: "Connecting tunnel…",
   old_ios: "iOS 17 or later required",
   timeout: "iPhone not responding",
+  choose_device: "Choose a device",
   connection_lost: "Connection lost",
 };
 
 function renderStatus(s) {
   const box = $("status");
   const reconnecting = s.simulating && s.reconnecting;
-  box.className = "status " + (reconnecting ? "status-warn" : s.ready ? "status-ready" : s.connected ? "status-warn" : "status-bad");
+  const choosing = s.code === "choose_device";
+  box.className = "status " + (reconnecting || choosing ? "status-warn" : s.ready ? "status-ready" : s.connected ? "status-warn" : "status-bad");
   const statusText = $("status-text");
   if (reconnecting) statusText.textContent = "Reconnecting to iPhone…";
   else if (s.ready && s.device) {
@@ -440,12 +495,13 @@ function renderStatus(s) {
     statusText.append(" ", el("span", { class: "conn" }, s.device.connection === "wifi" ? "Wi-Fi" : "USB"));
   } else statusText.textContent = SHORT_STATUS[s.code] || "Needs attention";
   renderWifi(s);
+  renderDevices(s);
   box.title = s.message;
 
   // Full plain-English instructions go in the panel, where there's room to read them.
   const problem = reconnecting ? s.last_error : !s.ready ? s.message : s.simulating ? s.last_error : null;
   $("alert").hidden = !problem;
-  $("alert").className = "alert" + (s.connected || reconnecting ? "" : " bad");
+  $("alert").className = "alert" + (s.connected || reconnecting || choosing ? "" : " bad");
   $("alert-text").textContent = problem || "";
 
   $("drift").checked = s.drift;

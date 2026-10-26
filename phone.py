@@ -111,6 +111,11 @@ def explain(exc: BaseException) -> PhoneError:
     return PhoneError(f"Something unexpected went wrong: {type(exc).__name__}: {exc}", "error")
 
 
+def same_device(a: Optional[str], b: Optional[str]) -> bool:
+    """Device IDs are sometimes written with dashes and sometimes without."""
+    return bool(a and b) and a.replace("-", "") == b.replace("-", "")
+
+
 def offset_meters(lat: float, lon: float, north_m: float, east_m: float) -> tuple[float, float]:
     """Move a coordinate by a number of meters north and east."""
     dlat = north_m / 111_320.0
@@ -144,6 +149,9 @@ class PhoneController:
         self._stack: Optional[contextlib.AsyncExitStack] = None
         self._sim: Optional[LocationSimulation] = None
         self._udid: Optional[str] = None
+        self.selected: Optional[str] = None  # the phone the user picked when several are connected
+        self._names: dict[str, dict] = {}     # udid -> {"name", "ios"}, so we don't ask every phone every poll
+        self._name_failed: dict[str, float] = {}
         self._mounted_for: Optional[str] = None
         self._maintain_task: Optional[asyncio.Task] = None
         self._wake: Optional[asyncio.Event] = None
@@ -183,6 +191,9 @@ class PhoneController:
 
     def set_wifi(self, enabled: bool) -> dict:
         return self.run(self._set_wifi(enabled), timeout=30)
+
+    def select_device(self, udid: Optional[str]) -> dict:
+        return self.run(self._select_device(udid), timeout=60)
 
     def state(self) -> dict:
         return self.run(self._get_state(), timeout=10)
@@ -236,40 +247,98 @@ class PhoneController:
         }
 
     @staticmethod
-    async def _find_device() -> tuple[Optional[str], Optional[str]]:
-        """The phone macOS can see: (udid, "USB" or "Network"), preferring the cable."""
-        devices = await list_devices()
-        for kind in ("USB", "Network"):
-            for d in devices:
-                if d.connection_type == kind:
-                    return d.serial, kind
-        return None, None
+    async def _list_phones() -> list[dict]:
+        """Every phone macOS can see, once each, noting whether it's on the cable, Wi-Fi, or both."""
+        phones: dict[str, dict] = {}
+        for d in await list_devices():
+            p = phones.setdefault(d.serial.replace("-", ""), {"udid": d.serial, "usb": False, "wifi": False})
+            if d.connection_type == "USB":
+                p["usb"] = True
+            elif d.connection_type == "Network":
+                p["wifi"] = True
+        return list(phones.values())
 
-    @staticmethod
-    def _tunnel_key(udid: Optional[str], tunnels: dict) -> Optional[str]:
+    def _choose_message(self, count: int) -> str:
+        return (f"{count} devices are connected. Choose which one Location Jump should use (click the "
+                "status at the top, or pick one below).")
+
+    async def _find_device(self) -> tuple[Optional[str], Optional[str]]:
+        """The phone to use: (udid, "USB" or "Network"), preferring the cable. (None, None) if it isn't here.
+
+        With several phones and no choice made yet, we refuse to guess: spoofing the wrong phone
+        would be bad. If the chosen phone goes away we wait for it instead of switching to another.
+        """
+        phones = await self._list_phones()
+        if self.selected:
+            phone = next((p for p in phones if same_device(p["udid"], self.selected)), None)
+        elif len(phones) > 1:
+            raise PhoneError(self._choose_message(len(phones)), "choose_device")
+        else:
+            phone = phones[0] if phones else None
+        if phone is None:
+            return None, None
+        return phone["udid"], "USB" if phone["usb"] else "Network"
+
+    def _tunnel_key(self, udid: Optional[str], tunnels: dict) -> Optional[str]:
         """tunneld's key for this phone (IDs may be written with or without dashes)."""
         if not tunnels:
             return None
+        udid = udid or self.selected
         if udid is None:
-            return next(iter(tunnels))  # a Wi-Fi tunnel macOS itself doesn't list
-        bare = udid.replace("-", "")
-        return next((k for k in tunnels if k.replace("-", "") == bare), None)
+            # A Wi-Fi tunnel macOS itself doesn't list. Only use it if there's no doubt which phone it is.
+            return next(iter(tunnels)) if len(tunnels) == 1 else None
+        return next((k for k in tunnels if same_device(k, udid)), None)
+
+    async def _describe(self, phone: dict) -> dict:
+        """Name and iOS version for the device list (cached; asking a phone takes a moment)."""
+        key = phone["udid"].replace("-", "")
+        if key not in self._names and time.monotonic() - self._name_failed.get(key, 0) > 30:
+            try:
+                lockdown = await create_using_usbmux(serial=phone["udid"],
+                                                     connection_type="USB" if phone["usb"] else "Network",
+                                                     pair_timeout=1)
+                try:
+                    self._names[key] = {"name": await lockdown.get_value(key="DeviceName"),
+                                        "ios": lockdown.product_version}
+                finally:
+                    with contextlib.suppress(Exception):
+                        await lockdown.close()
+            except Exception:
+                self._name_failed[key] = time.monotonic()  # e.g. not trusted yet; try again later
+        info = self._names.get(key, {"name": "Untrusted device", "ios": None})
+        return {**phone, **info, "selected": same_device(phone["udid"], self.selected)}
 
     async def _status(self) -> dict:
         """Check every link in the chain and report the first thing that's wrong."""
-        result = {"connected": False, "ready": False, "code": "ok", "message": "", "device": None}
+        result = {"connected": False, "ready": False, "code": "ok", "message": "", "device": None,
+                  "devices": [], "selected": self.selected}
         result.update(self._state())
 
         try:
+            phones = await self._list_phones()
+            if len(phones) > 1 or self.selected:
+                result["devices"] = [await self._describe(p) for p in phones]
             udid, kind = await self._find_device()
-        except Exception as exc:  # usbmuxd not reachable
+        except Exception as exc:  # usbmuxd not reachable, or several phones and none chosen yet
             err = explain(exc)
             result.update(code=err.code, message=err.message)
+            return result
+        if udid is None and self.selected:
+            chosen = self._names.get(self.selected.replace("-", ""), {}).get("name", "The iPhone you chose")
+            with contextlib.suppress(Exception):
+                if self._tunnel_key(None, await get_tunneld_tunnels()):
+                    result.update(connected=True, ready=True, message=f"Connected to {chosen} over Wi-Fi. Ready.",
+                                  device={"name": chosen, "ios": None, "udid": self.selected, "connection": "wifi",
+                                          "wifi_enabled": True})
+                    return result
+            result.update(code="not_connected",
+                          message=f"{chosen} isn't connected. Plug it in and unlock it (or pick another device at "
+                                  "the top).")
             return result
         if udid is None:
             # tunneld can also reach a phone over Wi-Fi on its own (Bonjour), without macOS listing it.
             with contextlib.suppress(Exception):
-                if await get_tunneld_tunnels():
+                if self._tunnel_key(None, await get_tunneld_tunnels()):
                     result.update(connected=True, ready=True, message="Connected to your iPhone over Wi-Fi. Ready.",
                                   device={"name": "iPhone", "ios": None, "udid": None, "connection": "wifi",
                                           "wifi_enabled": True})
@@ -295,6 +364,7 @@ class PhoneController:
             return result
 
         result["connected"] = True
+        self._names[udid.replace("-", "")] = {"name": name, "ios": version}
         result["device"] = {"name": name, "ios": version, "udid": udid,
                             "connection": "usb" if kind == "USB" else "wifi", "wifi_enabled": wifi_enabled}
 
@@ -343,6 +413,22 @@ class PhoneController:
             raise explain(exc)
         return await self._status()
 
+    async def _select_device(self, udid: Optional[str]) -> dict:
+        """Switch to another phone. The current phone is put back to its real location first."""
+        if not udid:
+            raise PhoneError("Choose a device.", "bad_input")
+        if not any(same_device(p["udid"], udid) for p in await self._list_phones()):
+            raise PhoneError("That device isn't connected anymore.", "not_connected")
+        if not same_device(udid, self.selected):
+            if self.anchor is not None:
+                with contextlib.suppress(Exception):
+                    await self._clear_location()
+            async with self._get_lock():
+                await self._close_session()
+                self._mounted_for = None
+                self.selected = udid
+        return await self._status()
+
     async def _close_session(self) -> None:
         stack, self._stack, self._sim = self._stack, None, None
         if stack is not None:
@@ -386,6 +472,9 @@ class PhoneController:
             await stack.aclose()
             raise
         self._stack, self._sim, self._udid = stack, sim, key
+        if self.selected is None:
+            # Remember which phone we're spoofing, so plugging in a second one later changes nothing.
+            self.selected = udid or key
         return sim
 
     async def _push(self, lat: float, lon: float) -> None:

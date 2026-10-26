@@ -103,6 +103,7 @@ Good to know:
   - The phone and Mac must be on the **same Wi-Fi network**. Office, hotel and guest networks often block devices from seeing each other, and then only the cable works.
   - Keep the phone **awake** (unlocked, or charging) for the first connection. iPhones turn Wi-Fi down when they sleep, so the connection can drop and come back. Auto-reconnect handles that, but the cable is more reliable.
   - The switch can only be changed while plugged in (Apple's rule). Turn it off the same way.
+- **Several devices** (say your iPhone and an iPad, or a friend's phone): when more than one is connected, Location Jump **won't guess**. It asks which one to use, right in the panel. Later you can switch by clicking the status at the top. Switching puts the previous device back to its real location first. If the device you chose is unplugged, the app waits for *that* device rather than quietly switching to another. The first device you fake a location on is remembered, so plugging in a second one later changes nothing.
 - **Favorites and Recent** (bottom of the panel): tap the **☆** next to the place your phone is showing to save it as a favorite. Every place you jump to is added to **Recent** automatically (the last 12). Click any saved place to jump straight there. They're stored in `saved_places.json` in the project folder, so they survive restarts.
 - **Your iPhone is showing** shows the exact coordinates your phone is reporting right now. The red dot on the map is the same thing.
 - **Reset to Real Location** puts your phone back to its real GPS.

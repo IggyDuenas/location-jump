@@ -102,6 +102,34 @@ body {
 .quit-card h2 { margin: 12px 0 8px; font-size: 20px; text-transform: none; letter-spacing: -0.01em; color: var(--text); }
 .quit-card p { margin: 0 0 8px; }
 
+/* ---------- device picker ---------- */
+.device-picker { position: relative; min-width: 0; }
+button.status { font-family: inherit; color: var(--text); cursor: default; }
+.status .caret { display: none; color: var(--muted); margin-right: -4px; }
+.status.switchable { cursor: pointer; }
+.status.switchable .caret { display: block; }
+.status.switchable:hover { border-color: var(--accent); }
+.device-menu {
+  position: absolute; top: calc(100% + 8px); left: 0; z-index: 1200; min-width: 280px; padding: 6px;
+  background: var(--card); border: 1px solid var(--card-border); border-radius: 16px; box-shadow: var(--shadow);
+  backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+}
+@media (prefers-color-scheme: dark) { .device-menu { background: #1e222d; } }
+.device-menu .menu-title { padding: 6px 10px 4px; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.device-item {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; text-align: left;
+  font: inherit; color: var(--text); background: none; border: 0; border-radius: 10px; cursor: pointer;
+}
+.device-item:hover, .device-item:focus-visible { background: var(--accent-soft); outline: none; }
+.device-item .d-icon { font-size: 20px; }
+.device-item .d-text { flex: 1; min-width: 0; }
+.device-item .d-name { display: block; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.device-item .d-sub { display: flex; gap: 4px; margin-top: 2px; font-size: 12px; color: var(--muted); }
+.device-item .d-check { color: var(--accent); font-weight: 700; }
+.alert-body { min-width: 0; flex: 1; }
+.device-choices { display: grid; gap: 6px; margin-top: 10px; }
+.device-choices .device-item { background: var(--card); border: 1px solid var(--card-border); color: var(--text); }
+
 /* ---------- side panel ---------- */
 .panel {
   position: fixed; top: 16px; right: 16px; bottom: 16px; width: 368px; z-index: 1000;
@@ -338,7 +366,8 @@ body {
   .quit { padding: 0 14px; }
   .brand-name { display: none; }
   .brand { padding: 0 7px; }
-  .status { flex: 1; min-width: 0; }
+  .device-picker { flex: 1; }
+  .status { width: 100%; min-width: 0; }
   #status-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .leaflet-top.leaflet-left { top: 64px; }
   .panel {
