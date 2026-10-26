@@ -141,6 +141,8 @@ class PhoneController:
     KEEPALIVE_S = 4.0          # how often we re-send the location to notice a dropped connection
     RETRY_S = 3.0              # how often we try to reconnect after a drop
     WALK_TICK_S = 1.0          # how often the location moves while walking
+    PHONE_TIMEOUT_S = 8.0      # longest one command to the phone may take (they normally take well under 1 s)
+    BUSY_WAIT_S = 5.0          # how long a button press waits for a busy phone before saying so
 
     def __init__(self) -> None:
         self._loop = asyncio.new_event_loop()
@@ -156,6 +158,7 @@ class PhoneController:
         self._mounted_for: Optional[str] = None
         self._maintain_task: Optional[asyncio.Task] = None
         self._wake: Optional[asyncio.Event] = None
+        self._waiting = 0  # button presses currently waiting for their turn with the phone
 
         # State reported to the UI
         self.anchor: Optional[tuple[float, float]] = None   # the point the user chose
@@ -221,6 +224,40 @@ class PhoneController:
         if self._lock is None:
             self._lock = asyncio.Lock()
         return self._lock
+
+    @contextlib.asynccontextmanager
+    async def _turn(self):
+        """Take a turn talking to the phone, for button presses.
+
+        If the phone is stuck on an earlier command, give up after BUSY_WAIT_S with a clear message
+        instead of queueing: queued requests would tie up the web server and freeze the whole page.
+        For the same reason only one button press waits at a time; others are told "busy" at once
+        (which also stops a frantic double-click from sending the same command twice).
+        """
+        busy = PhoneError("Your iPhone is still busy with the previous command (it may not be responding). "
+                          "Try again in a moment.", "busy")
+        lock = self._get_lock()
+        if lock.locked() and self._waiting:
+            raise busy
+        self._waiting += 1
+        try:
+            acquire = asyncio.ensure_future(lock.acquire())
+            done, _ = await asyncio.wait({acquire}, timeout=self.BUSY_WAIT_S)
+        finally:
+            self._waiting -= 1
+        if not done:
+            acquire.cancel()
+            try:
+                await acquire
+            except asyncio.CancelledError:
+                pass
+            else:
+                lock.release()  # we got the lock just as we gave up; hand it straight back
+            raise busy
+        try:
+            yield
+        finally:
+            lock.release()
 
     def _state(self) -> dict:
         return {
@@ -424,7 +461,7 @@ class PhoneController:
             if self.anchor is not None:
                 with contextlib.suppress(Exception):
                     await self._clear_location()
-            async with self._get_lock():
+            async with self._turn():
                 await self._close_session()
                 self._mounted_for = None
                 self.selected = udid
@@ -484,7 +521,7 @@ class PhoneController:
         for attempt in (1, 2):
             try:
                 sim = await self._open_session()
-                await asyncio.wait_for(sim.set(lat, lon), timeout=20)
+                await asyncio.wait_for(sim.set(lat, lon), timeout=self.PHONE_TIMEOUT_S)
                 self.current = (lat, lon)
                 self.last_error = None
                 return
@@ -501,7 +538,7 @@ class PhoneController:
 
     async def _set_location(self, lat: float, lon: float, label: Optional[str]) -> dict:
         lat, lon = validate_coords(lat, lon)
-        async with self._get_lock():
+        async with self._turn():
             try:
                 await self._push(lat, lon)
             except Exception as exc:
@@ -515,7 +552,7 @@ class PhoneController:
         return self._state()
 
     async def _clear_location(self) -> dict:
-        async with self._get_lock():
+        async with self._turn():
             self.walk = None
             if self.reconnecting:
                 # The connection is already gone, so the phone is back on its real GPS.
@@ -528,7 +565,7 @@ class PhoneController:
             try:
                 # Clear even if we don't think we're simulating, in case an old session left one behind.
                 sim = await self._open_session()
-                await asyncio.wait_for(sim.clear(), timeout=20)
+                await asyncio.wait_for(sim.clear(), timeout=self.PHONE_TIMEOUT_S)
             except Exception as exc:
                 await self._close_session()
                 err = explain(exc)
@@ -537,6 +574,8 @@ class PhoneController:
             finally:
                 self.anchor = self.current = self.label = None
                 self.reconnecting = False
+                if self._wake is not None:
+                    self._wake.set()  # let the background loop see it's over and stop now
             await self._close_session()
             self.last_error = None
         return self._state()
@@ -546,9 +585,9 @@ class PhoneController:
         if self._wake is not None:
             self._wake.set()  # start (or stop) drifting now, not after the current wait
         if was_enabled and not self.drift_enabled and self.anchor is not None and not self.reconnecting:
-            # Snap back to the exact chosen point.
-            async with self._get_lock():
-                with contextlib.suppress(Exception):
+            # Snap back to the exact chosen point (best effort: the next keep-alive does it anyway).
+            with contextlib.suppress(Exception):
+                async with self._turn():
                     await self._push(*self.anchor)
         return self._state()
 
@@ -580,7 +619,7 @@ class PhoneController:
         return self._state()
 
     async def _stop_walk(self) -> dict:
-        async with self._get_lock():
+        async with self._turn():
             if self.walk is not None:
                 # Stay wherever we got to.
                 self.walk = None

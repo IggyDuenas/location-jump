@@ -772,3 +772,85 @@ def test_first_spoof_remembers_the_phone(devices, monkeypatch):
     devices["mux"].append(FakeMuxDevice("BBB", "USB"))  # a second phone arrives mid-spoof
     s = c.status()
     assert s["ready"] and s["device"]["udid"] == "AAA" and len(s["devices"]) == 2
+
+
+# ---------- a stuck phone must not freeze everything ----------
+
+def test_busy_phone_answers_quickly_instead_of_queueing(controller, monkeypatch):
+    monkeypatch.setattr(controller, "BUSY_WAIT_S", 0.2)
+    controller.set_location(1, 2)
+
+    async def hold_lock(seconds):
+        async with controller._get_lock():
+            await asyncio.sleep(seconds)
+
+    holder = asyncio.run_coroutine_threadsafe(hold_lock(1.0), controller._loop)
+    time.sleep(0.05)
+    t0 = time.monotonic()
+    with pytest.raises(phone.PhoneError) as info:
+        controller.set_location(3, 4)
+    assert info.value.code == "busy" and time.monotonic() - t0 < 0.6
+    holder.result(5)
+    assert controller.set_location(3, 4)["anchor"] == [3, 4]  # the lock wasn't leaked
+
+
+def test_lock_freed_just_as_we_give_up_is_not_leaked(controller, monkeypatch):
+    for wait in (0.05, 0.09, 0.1, 0.11, 0.15):  # race the timeout against the release
+        monkeypatch.setattr(controller, "BUSY_WAIT_S", 0.1)
+
+        async def race(wait=wait):
+            lock = controller._get_lock()
+            await lock.acquire()
+            asyncio.get_running_loop().call_later(wait, lock.release)
+            try:
+                async with controller._turn():
+                    pass
+            except phone.PhoneError:
+                pass
+            await asyncio.sleep(wait + 0.05)  # after the other holder has let go...
+            return lock.locked()  # ...nobody may still be holding it
+
+        assert controller.run(race()) is False
+
+
+def test_reset_stops_the_background_loop_right_away(controller):
+    controller.set_location(1, 2)
+    assert not controller._maintain_task.done()
+    controller.clear_location()
+    assert wait_until(controller, lambda: controller._maintain_task.done(), timeout=1.0)
+
+
+def test_phone_command_timeout_is_short(controller, monkeypatch):
+    monkeypatch.setattr(controller, "PHONE_TIMEOUT_S", 0.2)
+
+    async def hang(lat, lon):
+        await asyncio.sleep(10)
+
+    monkeypatch.setattr(controller.fake_sim, "set", hang)
+    t0 = time.monotonic()
+    with pytest.raises(phone.PhoneError) as info:
+        controller.set_location(1, 2)
+    assert info.value.code == "timeout" and time.monotonic() - t0 < 1.5  # two attempts, then a clear error
+
+
+def test_only_one_button_press_waits_others_get_busy_at_once(controller, monkeypatch):
+    monkeypatch.setattr(controller, "BUSY_WAIT_S", 1.0)
+    controller.set_location(1, 2)
+
+    async def scenario():
+        lock = controller._get_lock()
+        await lock.acquire()  # the phone is stuck on something
+        first = asyncio.ensure_future(controller._set_location(3, 4, None))  # waits for its turn
+        await asyncio.sleep(0.05)
+        t0 = time.monotonic()
+        try:
+            await controller._set_location(5, 6, None)  # a second click while the first is waiting
+        except phone.PhoneError as err:
+            second = (err.code, time.monotonic() - t0)
+        lock.release()
+        await first
+        return second, controller.anchor
+
+    (code, waited), anchor = controller.run(scenario())
+    assert code == "busy" and waited < 0.05  # told immediately, not after a wait
+    assert anchor == (3, 4)  # the first click still went through

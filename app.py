@@ -212,4 +212,4 @@ if __name__ == "__main__":
     # waitress is a production web server (Flask's built-in one is only for development).
     # Several threads so a slow phone call doesn't freeze the page; 127.0.0.1 keeps it on your Mac only.
     from waitress import serve
-    serve(app, host="127.0.0.1", port=port, threads=8, ident="Location Jump")
+    serve(app, host="127.0.0.1", port=port, threads=16, ident="Location Jump")
