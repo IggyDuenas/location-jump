@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "skills": {
+    "design-to-motion": {
+      "source": "elayadesign/ai-design-skills",
+      "sourceType": "github",
+      "skillPath": "skills/design-to-motion/SKILL.md",
+      "computedHash": "30c3881567f12e6be0e20f5e757184a52c0e9ed8da70ed98e798bd5d89a113e6"
+    },
+    "landing-page-design": {
+      "source": "elayadesign/ai-design-skills",
+      "sourceType": "github",
+      "skillPath": "skills/landing-page-design/SKILL.md",
+      "computedHash": "8a5b47edc97a646b183d781186014ace4252eada17ab174302f89e366eb3a968"
+    }
+  }
+}
