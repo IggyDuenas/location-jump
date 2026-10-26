@@ -473,8 +473,8 @@ def test_walk_moves_along_the_path_and_arrives(walker):
     path = Path([(0.0, 0.0), (0.0, 0.001)])  # ~111 m
     state = walker.start_walk(path, 100.0, "Finish", "walk", True)
     assert state["walk"]["total_m"] > 100 and state["label"] is None
-    assert wait_until(walker, lambda: walker.walk is not None and 0 < walker.walk["done_m"] < path.total_m)
-    assert 0 < walker.current[1] < 0.001
+    # Wait for a point the phone actually received (done_m moves a moment before the point is sent).
+    assert wait_until(walker, lambda: walker.walk is not None and 0 < walker.current[1] < 0.001)
     assert wait_until(walker, lambda: walker.walk is None)
     assert walker.anchor == (0.0, 0.001) and walker.label == "Finish"
     sent = [c for c in walker.fake_sim.calls if c[0] == "set"]
@@ -499,7 +499,7 @@ def test_walk_pauses_while_disconnected(walker):
 def test_stop_walk_stays_put_and_set_location_cancels(walker):
     walker.set_location(0.0, 0.0)
     walker.start_walk(Path([(0.0, 0.0), (0.0, 0.01)]), 20.0, "Far", "walk", True)
-    assert wait_until(walker, lambda: walker.walk["done_m"] > 0)
+    assert wait_until(walker, lambda: walker.current[1] > 0)  # the phone has moved
     state = walker.stop_walk()
     assert state["walk"] is None and state["anchor"] == list(walker.current) and 0 < state["anchor"][1] < 0.01
     walker.start_walk(Path([(0.0, 0.0), (0.0, 0.01)]), 20.0, "Far", "walk", True)
