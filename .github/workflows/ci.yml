@@ -24,7 +24,11 @@ jobs:
       - name: Shell scripts (shellcheck)
         run: shellcheck *.sh
       - name: JavaScript syntax
-        run: node --check static/app.js
+        run: |
+          node --check static/app.js
+          node --check site/site.js
+      - name: Website builds
+        run: python scripts/build_site.py
 
   test:
     name: Tests (Python ${{ matrix.python }})

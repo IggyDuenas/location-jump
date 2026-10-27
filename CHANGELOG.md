@@ -2,6 +2,16 @@
 
 All notable changes to Location Jump. Versions follow [semantic versioning](https://semver.org).
 
+## [1.1.0] - 2026-10-26
+
+### Added
+- **Project website** (`site/`), published to GitHub Pages: features, a live "jump around the world" demo, install steps with copy buttons, FAQ and responsible-use notes.
+- **Stress test** (`scripts/stress_test.py`): many clients against an unreliable pretend iPhone, with pass/fail checks.
+
+### Fixed
+- A hung iPhone command could freeze the whole page for about 20 seconds, because every request waiting for the phone tied up the web server (found by the stress test). Button presses now wait at most 5 s and only one at a time, getting a clear "busy" message otherwise; phone commands time out after 8 s instead of 20 s; the server has 16 threads. Under 40 simultaneous clients: worst ping 20 s → 0.25 s, throughput 31 → 279 requests/s.
+- Reset now stops the background loop immediately instead of on its next tick.
+
 ## [1.0.0] - 2026-10-26
 
 ### Added

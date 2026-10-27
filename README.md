@@ -1,10 +1,12 @@
 # 📍 Location Jump
 
 [![CI](https://github.com/iggyduenas/location-jump/actions/workflows/ci.yml/badge.svg)](https://github.com/iggyduenas/location-jump/actions/workflows/ci.yml)
-![Version](https://img.shields.io/badge/version-1.0.0-6d4aff)
+![Version](https://img.shields.io/badge/version-1.1.0-6d4aff)
 ![macOS](https://img.shields.io/badge/macOS-11%2B-lightgrey)
 ![iOS](https://img.shields.io/badge/iOS-17%2B-lightgrey)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
+**Website: [iggyduenas.github.io/location-jump](https://iggyduenas.github.io/location-jump/)**
 
 A small Mac tool that sets the GPS location of your USB-connected iPhone (iOS 17 or later) from a web page on your Mac. Pick a spot on a map, or hit **Random Location** to jump to one of 55 famous places. Your phone then reports that location to every app, including Snap Map.
 
@@ -190,6 +192,8 @@ make test      # just the tests
 ```
 
 - **CI** (`.github/workflows/ci.yml`) runs on every push to `main` and every pull request: linting, the tests on Python 3.9 (what macOS ships), 3.11 and 3.13, and on a real macOS machine it builds the app bundle, installs and removes the tunnel service, and smoke-tests `start.sh`.
+- **Stress test**: `python scripts/stress_test.py` runs the real server with 40 clients against a deliberately unreliable pretend iPhone (slow, dropping, hanging, unplugging) and checks it stays responsive and correct. Options: `--clients`, `--seconds`.
+- **Website**: the project site lives in `site/`. `python scripts/build_site.py` assembles it into `_site/`, and the *Website* workflow publishes it to GitHub Pages on every push to `main` that changes it.
 - **Screenshots**: run the *Screenshots* workflow from the Actions tab (or `python scripts/screenshots.py` locally) to regenerate the images in `docs/screenshots/` with a pretend iPhone.
 - **Version** lives in `version.py`; changes are listed in [CHANGELOG.md](CHANGELOG.md).
 
