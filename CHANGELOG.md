@@ -4,10 +4,15 @@ All notable changes to Location Jump. Versions follow [semantic versioning](http
 
 ## [Unreleased]
 
+### Fixed
+- **"Python 3 isn't installed" when opening the app**, even though Python worked in Terminal. Apps opened from Launchpad don't get Terminal's PATH, and a broken leftover Homebrew or python.org link could be picked first. `start.sh` now tries every usual Python location, uses the first 3.9+ that runs, and logs why Apple's `python3` failed with a message that points at the real fix (install the tools, accept the Xcode license, or install from python.org).
+- `tunnel-service.sh` explains what to do when your Mac account isn't an administrator.
+
 ### Changed
 - **New identity.** The pixel-pin icon replaces the old app icon (Mac app, web app and website), with a pixel favicon, an Apple touch icon and a 1200×630 link-preview image.
 - **The app is Matrix green too.** The purple accent in the Mac app's web interface (buttons, switches, the route line, the phone dot) is now the design system's green, with black text on green in dark mode; the top bar shows the pixel-pin mark. README screenshots retaken.
 - **Website follows the Location Jump design system**: dot-grid hero, Geist Mono kickers with a `>` prefix, numbered feature cards, a tagline that lights up in green with a block cursor, a green ring on screenshot windows, hairline section rules, and warning, danger and status colours that keep 4.5:1 contrast in both themes.
+- Website and README install steps now include checking `python3 --version`, with python.org as the fallback, plus FAQ and troubleshooting entries for missing Python and non-administrator accounts.
 
 ## [1.1.0] - 2026-10-26
 

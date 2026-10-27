@@ -56,13 +56,34 @@ if [[ "$(uname)" != "Darwin" ]]; then
   warn "This tool is meant for macOS. Continuing anyway, but the tunnel steps may differ."
 fi
 
-PYTHON="${PYTHON:-python3}"
-if ! command -v "$PYTHON" >/dev/null 2>&1 || ! "$PYTHON" -c 'import sys' >/dev/null 2>&1; then
-  die "Python 3 isn't installed. Open Terminal and run:  xcode-select --install   then try again."
+# Apps opened from Launchpad don't get Terminal's PATH, and a leftover Homebrew or python.org
+# link can be broken, so try every usual place and use the first Python 3.9+ that runs.
+find_python() {
+  local c
+  for c in ${PYTHON:+"$PYTHON"} python3 \
+           /Library/Frameworks/Python.framework/Versions/Current/bin/python3 \
+           /opt/homebrew/bin/python3 /usr/local/bin/python3 /usr/bin/python3; do
+    command -v "$c" >/dev/null 2>&1 || continue
+    if "$c" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 9) else 1)' >/dev/null 2>&1; then
+      command -v "$c"; return 0
+    fi
+  done
+  return 1
+}
+
+if ! PYTHON="$(find_python)"; then
+  # Say why Apple's python3 didn't run, so the message points at the real fix.
+  why="$(/usr/bin/python3 -c 'import sys' 2>&1 || true)"
+  echo "No working Python 3.9+ found. /usr/bin/python3 said: ${why:-nothing}"
+  if [[ "$why" == *icense* ]]; then
+    die "Python needs the Xcode license accepted. Open Terminal and run:  sudo xcodebuild -license accept   then try again."
+  elif [[ "$why" == *"developer path"* || "$why" == *xcode-select* || -z "$(xcode-select -p 2>/dev/null)" ]]; then
+    die "Python 3 isn't installed. Open Terminal and run:  xcode-select --install   then try again."
+  else
+    die "Python 3 didn't start. Install it from python.org/downloads (the macOS installer), then try again."
+  fi
 fi
-if ! "$PYTHON" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 9) else 1)'; then
-  die "Python 3.9 or newer is required (you have $("$PYTHON" --version 2>&1))."
-fi
+echo "Using $PYTHON ($("$PYTHON" --version 2>&1))"
 
 if [[ ! -x .venv/bin/python ]]; then
   say "Creating a virtual environment in .venv (one-time)…"

@@ -39,7 +39,9 @@ cmd_install() {
   pin="$(grep -i '^pymobiledevice3' requirements.txt)"
 
   say "Installing the tunnel service. macOS will ask for your Mac password (one time)."
-  sudo -v || die "Administrator access is needed to install a background service."
+  sudo -v || die "Administrator access is needed to install a background service, and this Mac account isn't an administrator.
+    Either log in as an administrator and run ./tunnel-service.sh install, or skip this step:
+    Location Jump will then ask for an administrator's name and password each time it starts."
 
   say "Creating a private copy of pymobiledevice3 in $SERVICE_DIR (takes a minute)…"
   sudo mkdir -p "$SERVICE_DIR"
