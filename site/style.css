@@ -288,6 +288,7 @@ b, strong { font-weight: 600; }
 }
 .faq details[open] summary::after { transform: rotate(45deg); }
 .faq details p { padding: 0 0 24px; color: var(--muted); }
+.faq code { font: 14px/20px var(--mono); color: var(--text); }
 .notice { display: flex; gap: 16px; margin-top: 48px; padding: 24px; border-color: rgba(245, 158, 11, 0.35); background: rgba(245, 158, 11, 0.07); }
 .notice-icon { width: 24px; height: 24px; color: #d97706; }
 .notice p { margin-top: 4px; font-size: 14px; line-height: 20px; color: var(--muted); }
@@ -421,3 +422,22 @@ b, strong { font-weight: 600; }
 .app-status[data-state="off"]::before { background: #d97706; }
 .app-status[data-state="error"] { color: #dc2626; }
 .app-status[data-state="error"]::before { background: #dc2626; }
+
+/* ---------- privacy and terms ---------- */
+.doc { padding: 128px 0 96px; }
+.prose { max-width: 768px; }
+.prose h1 { font-size: 48px; line-height: 1; }
+.prose .updated { margin-top: 12px; font-size: 14px; line-height: 20px; color: var(--muted); }
+.prose h2 { margin-top: 48px; font-size: 24px; line-height: 32px; }
+.prose > p, .prose li { margin-top: 16px; color: var(--muted); }
+.prose > p:first-of-type { margin-top: 0; }
+.prose .updated + p { margin-top: 32px; font-size: 18px; line-height: 28px; }
+.prose ul { margin: 16px 0 0; padding-left: 24px; }
+.prose li { margin-top: 8px; }
+.prose strong { color: var(--text); }
+.prose code { font: 14px/20px var(--mono); }
+.footer-links a[aria-current="page"] { color: var(--text); }
+@media (max-width: 768px) {
+  .doc { padding: 96px 0 64px; }
+  .prose h1 { font-size: 36px; line-height: 40px; }
+}
