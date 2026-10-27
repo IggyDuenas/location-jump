@@ -33,7 +33,8 @@ const phoneMarker = L.marker([0, 0], {
   keyboard: false,
   zIndexOffset: 1000,
 });
-const routeLine = L.polyline([], { color: "#6d4aff", weight: 5, opacity: 0.75, dashArray: "2 9", lineCap: "round" });
+const accent = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#007a0f";
+const routeLine = L.polyline([], { color: accent, weight: 5, opacity: 0.75, dashArray: "2 9", lineCap: "round" });
 let routeId = null;    // which walk the route line is drawn for
 let flownTo = null;    // last anchor we zoomed the map to
 let pickLabel = null;  // name of the picked spot, when it came from search or a saved place
