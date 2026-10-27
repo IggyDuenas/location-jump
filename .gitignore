@@ -6,3 +6,6 @@ __pycache__/
 saved_places.json
 saved_places.json.*
 _site/
+
+# Readable source of the website friends area (only the encrypted site/friends.enc.json is committed)
+friends/
