@@ -378,3 +378,14 @@ b, strong { font-weight: 600; }
   .friends { padding: 96px 0 64px; }
   .friends-content h1 { font-size: 36px; line-height: 40px; }
 }
+.rules { display: grid; gap: 12px; margin: 32px 0 0; padding: 0; list-style: none; counter-reset: rule; }
+.rules li {
+  counter-increment: rule; display: flex; gap: 16px; margin: 0; padding: 16px 24px;
+  background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+}
+.rules li > span { padding-top: 4px; }
+.rules li::before {
+  content: counter(rule); flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9999px;
+  font-size: 14px; line-height: 20px; font-weight: 600; color: var(--on-accent); background: var(--accent);
+}
+.rules strong { color: var(--text); }
