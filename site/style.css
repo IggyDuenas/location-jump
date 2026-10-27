@@ -389,3 +389,19 @@ b, strong { font-weight: 600; }
   font-size: 14px; line-height: 20px; font-weight: 600; color: var(--on-accent); background: var(--accent);
 }
 .rules strong { color: var(--text); }
+.places { display: grid; gap: 12px; margin: 24px 0 0; padding: 0; list-style: none; }
+.friends-content .place {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px; margin: 0; padding: 16px 24px;
+  background: var(--card); border: 1px solid var(--border); border-radius: 16px; color: var(--text);
+}
+.place strong { font-size: 18px; line-height: 28px; font-weight: 600; }
+.coords { display: flex; flex-wrap: wrap; gap: 8px; }
+.coord { display: inline-flex; align-items: center; gap: 8px; padding: 4px 4px 4px 12px; background: var(--bg-alt); border-radius: 9999px; }
+.coord-label { font-size: 12px; line-height: 16px; font-weight: 500; color: var(--muted); }
+.coord code { font: 14px/20px var(--mono); color: var(--text); }
+.copy-coord {
+  padding: 4px 12px; font: 600 12px/16px var(--font); color: var(--accent); background: var(--accent-soft);
+  border: 0; border-radius: 9999px; cursor: pointer; transition: background-color 300ms var(--ease), transform 500ms var(--ease);
+}
+.copy-coord:hover { background: var(--raised); }
+.copy-coord:active { transform: scale(0.98); }
