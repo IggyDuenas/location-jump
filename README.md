@@ -181,7 +181,7 @@ Browser (map UI) ──HTTP──► Flask app (app.py) ──► phone.py ─�
 - **`tunnel-service.sh`**: installs the tunnel as an always-on LaunchDaemon with its own root-owned copy of pymobiledevice3.
 - **`install-app.sh`** + **`assets/AppIcon.png`**: build the Location Jump.app launcher (which runs `start.sh --background`).
 
-The web app only listens on `127.0.0.1`, so nobody else on your Wi-Fi can open it. It also refuses requests that other websites might try to send to it from your browser: every change must come from its own page as JSON, and requests addressed to any host other than `localhost` are rejected.
+The web app only listens on `127.0.0.1`, so nobody else on your Wi-Fi can open it. It also refuses requests that other websites might try to send to it from your browser: every change must come from its own page as JSON, and requests addressed to any host other than `localhost` are rejected. The one exception is the project website (`https://iggyduenas.github.io`): its friends area may check that the app is running and set a location (`/api/ping` and `/api/location` only), after your browser asks you to allow it.
 
 ## For developers
 
