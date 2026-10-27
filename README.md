@@ -57,9 +57,12 @@ Open the **Terminal** app (press ⌘+Space, type *Terminal*, press Enter) and ru
 
 ```bash
 xcode-select --install          # installs Python 3 and git; if it says "already installed", that's fine
+python3 --version               # should print Python 3.9 or newer
 git clone https://github.com/iggyduenas/location-jump.git
 cd location-jump
 ```
+
+If `python3 --version` doesn't print 3.9 or newer, install Python from [python.org](https://www.python.org/downloads/macos/) (the macOS installer) and open a new Terminal window.
 
 ## Step 3: Start it (every time)
 
@@ -164,6 +167,8 @@ Good to know:
 | Wi-Fi mode is on but the status says **No iPhone found** after unplugging | Wait up to a minute with the phone unlocked. Check both are on the same Wi-Fi network (not a guest network). Still nothing? Plug the cable back in; it always works. |
 | **Couldn't reach the place search** | Search needs internet on your Mac. You can still click the map or use Random. |
 | Browser shows **"403 Forbidden"** at localhost:5000 | That's the Mac's AirPlay Receiver, not this app. Use the address `start.sh` printed (probably http://localhost:5001). |
+| App says **Python 3 isn't installed** | Run `xcode-select --install`, then `python3 --version`. If that doesn't print 3.9 or newer, install Python from [python.org](https://www.python.org/downloads/macos/). The real reason is in `~/Library/Logs/LocationJump.log`. |
+| `tunnel-service.sh` says **Administrator access is needed** / *may not run sudo* | Your Mac account isn't an administrator. Log in as one and run `./tunnel-service.sh install`, or skip the service and have an administrator enter their name and password when the app starts. |
 | Phone seems stuck on a fake location | Press **Reset to Real Location**. If the tool isn't running anymore, simply **restart the iPhone**; that always restores the real GPS. |
 
 To see the tunnel's own log while debugging, stop it (`./stop.sh`) and run it in the foreground:

@@ -261,9 +261,10 @@
           <li class="card step reveal">
             <span class="num">2</span>
             <div>
-              <h3>Download it</h3>
-              <p>Open Terminal and run:</p>
+              <h3>Install Python and download it</h3>
+              <p>Open Terminal and run these. The first installs Python 3 and git (if it says they're already installed, that's fine); <code>python3 --version</code> should then print 3.9 or newer.</p>
               <div class="code"><div class="code-bar"><span>Terminal</span><button class="copy" type="button" aria-label="Copy commands"><svg class="ic" aria-hidden="true"><use href="#i-copy"/></svg><span>Copy</span></button></div><pre><code>xcode-select --install
+python3 --version
 git clone https://github.com/IggyDuenas/location-jump.git
 cd location-jump</code></pre></div>
             </div>
@@ -272,7 +273,7 @@ cd location-jump</code></pre></div>
             <span class="num">3</span>
             <div>
               <h3>Install it once</h3>
-              <p>This sets up the secure connection (it asks for your Mac password once) and adds the app to Launchpad.</p>
+              <p>This sets up the secure connection (it asks for your Mac password once, so use an administrator account) and adds the app to Launchpad.</p>
               <div class="code"><div class="code-bar"><span>Terminal</span><button class="copy" type="button" aria-label="Copy commands"><svg class="ic" aria-hidden="true"><use href="#i-copy"/></svg><span>Copy</span></button></div><pre><code>./tunnel-service.sh install
 ./install-app.sh</code></pre></div>
             </div>
@@ -340,6 +341,14 @@ cd location-jump</code></pre></div>
           <details>
             <summary>Does it work on iPad?</summary>
             <p>Yes. iPads on iOS 17 or later work the same way as iPhones. With several devices plugged in, the app asks which one to use.</p>
+          </details>
+          <details>
+            <summary>It says Python 3 isn't installed. What do I do?</summary>
+            <p>Open Terminal and run <code>xcode-select --install</code>, then <code>python3 --version</code>. If that still doesn't print 3.9 or newer, install Python from <a href="https://www.python.org/downloads/macos/">python.org</a> with the macOS installer. Then quit and reopen Location Jump; the reason it couldn't start is in <code>~/Library/Logs/LocationJump.log</code>.</p>
+          </details>
+          <details>
+            <summary>What if my Mac account isn't an administrator?</summary>
+            <p>The secure connection to iOS 17 needs administrator rights. Ask an administrator to run <code>./tunnel-service.sh install</code> once, or skip that step and have an administrator type their name and password when Location Jump starts.</p>
           </details>
           <details>
             <summary>How do I update it?</summary>
