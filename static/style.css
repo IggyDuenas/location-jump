@@ -7,9 +7,12 @@
   --muted: #64748b;
   --field: #f1f5f9;
   --field-border: #e2e8f0;
-  --accent: #6d4aff;
-  --accent-2: #2f80ff;
-  --accent-soft: rgba(109, 74, 255, 0.12);
+  /* Matrix green, from the Location Jump design system. --accent-2 matches --accent so fills stay flat. */
+  --accent: #007a0f;
+  --accent-2: #007a0f;
+  --accent-soft: rgba(0, 143, 17, 0.1);
+  --accent-glow: rgba(0, 143, 17, 0.45);
+  --on-accent: #ffffff;
   --danger: #e5484d;
   --ok: #22c55e;
   --warn: #f59e0b;
@@ -27,9 +30,11 @@
     --muted: #94a3b8;
     --field: rgba(255, 255, 255, 0.06);
     --field-border: rgba(255, 255, 255, 0.1);
-    --accent: #8b6bff;
-    --accent-2: #4f9bff;
-    --accent-soft: rgba(139, 107, 255, 0.18);
+    --accent: #00ff41;
+    --accent-2: #00ff41;
+    --accent-soft: rgba(0, 255, 65, 0.12);
+    --accent-glow: rgba(0, 255, 65, 0.35);
+    --on-accent: #000000;
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 16px 48px rgba(0, 0, 0, 0.5);
   }
 }
@@ -68,10 +73,7 @@ body {
   background: var(--glass); border: 1px solid var(--card-border); border-radius: 999px;
   box-shadow: var(--shadow); backdrop-filter: blur(20px) saturate(1.6); -webkit-backdrop-filter: blur(20px) saturate(1.6);
 }
-.brand-mark {
-  display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; color: #fff;
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
-}
+.brand-mark { display: block; width: 30px; height: 30px; border-radius: 8px; }
 .brand-name { font-weight: 700; letter-spacing: -0.01em; }
 .status { padding: 0 16px; font-size: 14px; font-weight: 500; }
 .status .dot { position: relative; width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex: none; }
@@ -242,7 +244,7 @@ button.status { font-family: inherit; color: var(--text); cursor: default; }
 .saved-text { min-width: 0; }
 .saved-name { display: block; font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .saved-coords { display: block; font: 12px ui-monospace, "SF Mono", Menlo, monospace; color: var(--muted); }
-.saved-list li.current .saved-icon { color: #fff; background: linear-gradient(135deg, var(--accent), var(--accent-2)); }
+.saved-list li.current .saved-icon { color: var(--on-accent); background: linear-gradient(135deg, var(--accent), var(--accent-2)); }
 .saved-list .icon-btn { margin: 0 4px 0 0; opacity: 0; }
 .saved-list li:hover .icon-btn, .saved-list .icon-btn:focus-visible, .saved-list .icon-btn[aria-pressed="true"] { opacity: 1; }
 @media (hover: none) { .saved-list .icon-btn { opacity: 1; } }
@@ -282,9 +284,9 @@ button.status { font-family: inherit; color: var(--text); cursor: default; }
 .btn:disabled { opacity: .6; cursor: progress; }
 .btn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--accent-soft); }
 .btn-primary {
-  color: #fff; font-size: 16px; padding: 14px;
+  color: var(--on-accent); font-size: 16px; padding: 14px;
   background: linear-gradient(135deg, var(--accent), var(--accent-2));
-  box-shadow: 0 6px 20px rgba(109, 74, 255, 0.35);
+  box-shadow: 0 6px 20px -4px var(--accent-glow);
 }
 .btn-primary:hover:not(:disabled) { filter: brightness(1.07); }
 .btn-row { display: grid; grid-template-columns: 1fr; gap: 8px; margin-top: 8px; }

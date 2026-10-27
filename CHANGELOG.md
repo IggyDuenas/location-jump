@@ -2,6 +2,13 @@
 
 All notable changes to Location Jump. Versions follow [semantic versioning](https://semver.org).
 
+## [Unreleased]
+
+### Changed
+- **New identity.** The pixel-pin icon replaces the old app icon (Mac app, web app and website), with a pixel favicon, an Apple touch icon and a 1200×630 link-preview image.
+- **The app is Matrix green too.** The purple accent in the Mac app's web interface (buttons, switches, the route line, the phone dot) is now the design system's green, with black text on green in dark mode; the top bar shows the pixel-pin mark. README screenshots retaken.
+- **Website follows the Location Jump design system**: dot-grid hero, Geist Mono kickers with a `>` prefix, numbered feature cards, a tagline that lights up in green with a block cursor, a green ring on screenshot windows, hairline section rules, and warning, danger and status colours that keep 4.5:1 contrast in both themes.
+
 ## [1.1.0] - 2026-10-26
 
 ### Added
