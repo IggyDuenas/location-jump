@@ -1,12 +1,21 @@
-# 📍 Location Jump
+<p align="center">
+  <a href="https://iggyduenas.github.io/location-jump/"><img src="site/location-jump-og-1200x630.png" alt="Location Jump: your iPhone, anywhere, right from your Mac" width="100%"></a>
+</p>
 
-[![CI](https://github.com/iggyduenas/location-jump/actions/workflows/ci.yml/badge.svg)](https://github.com/iggyduenas/location-jump/actions/workflows/ci.yml)
-![Version](https://img.shields.io/badge/version-1.1.0-6d4aff)
-![macOS](https://img.shields.io/badge/macOS-11%2B-lightgrey)
-![iOS](https://img.shields.io/badge/iOS-17%2B-lightgrey)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+<h1 align="center">
+  <img src="assets/AppIcon.png" alt="" width="96" height="96"><br>
+  Location Jump
+</h1>
 
-**Website: [iggyduenas.github.io/location-jump](https://iggyduenas.github.io/location-jump/)**
+<p align="center">
+  <a href="https://github.com/iggyduenas/location-jump/actions/workflows/ci.yml"><img src="https://github.com/iggyduenas/location-jump/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <img src="https://img.shields.io/badge/version-1.1.0-007a0f" alt="Version 1.1.0">
+  <img src="https://img.shields.io/badge/macOS-11%2B-lightgrey" alt="macOS 11+">
+  <img src="https://img.shields.io/badge/iOS-17%2B-lightgrey" alt="iOS 17+">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License: MIT"></a>
+</p>
+
+<p align="center"><b>Website: <a href="https://iggyduenas.github.io/location-jump/">iggyduenas.github.io/location-jump</a></b></p>
 
 A small Mac tool that sets the GPS location of your USB-connected iPhone (iOS 17 or later) from a web page on your Mac. Pick a spot on a map, or hit **Random Location** to jump to one of 55 famous places. Your phone then reports that location to every app, including Snap Map.
 
