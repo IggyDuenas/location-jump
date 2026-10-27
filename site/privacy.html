@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Privacy policy · Location Jump</title>
+  <meta name="description" content="How the Location Jump website and Mac app handle information: no accounts, no tracking, and which outside services they contact.">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+  <link rel="icon" type="image/png" href="icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Icons: Phosphor (regular), MIT licensed, https://phosphoricons.com -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-arrow-right" viewBox="0 0 256 256"><path d="M221.66,133.66l-72,72a8,8,0,0,1-11.32-11.32L196.69,136H40a8,8,0,0,1,0-16H196.69L138.34,61.66a8,8,0,0,1,11.32-11.32l72,72A8,8,0,0,1,221.66,133.66Z"/></symbol>
+  </svg>
+
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="nav">
+    <div class="nav-bar">
+      <a class="logo" href="./" aria-label="Location Jump home">
+        <img src="icon.png" alt="" width="28" height="28">
+        <span>Location Jump</span>
+      </a>
+      <a class="btn btn-small btn-ghost" href="./">Back to the site</a>
+    </div>
+  </header>
+
+  <main id="main" class="doc">
+    <article class="wrap prose">
+      <p class="kicker">Legal</p>
+      <h1>Privacy policy</h1>
+      <p class="updated">Last updated October 27, 2026</p>
+
+      <p>Location Jump is a free, open source hobby project. It has no accounts, no ads, no analytics and no servers of its own. This page explains what the website and the Mac app do with information, and which other services they talk to.</p>
+
+      <h2>The short version</h2>
+      <ul>
+        <li>We don't collect, store or sell any personal information.</li>
+        <li>The website uses no cookies and no tracking.</li>
+        <li>The app runs entirely on your Mac. The locations you pick stay on your Mac and your iPhone.</li>
+        <li>A few outside services (listed below) see your IP address when the site or app loads something from them, as with any website.</li>
+      </ul>
+
+      <h2>This website</h2>
+      <p>The site is a set of static pages. It doesn't set cookies, run analytics or ask you for any information. Loading it contacts:</p>
+      <ul>
+        <li><strong>GitHub Pages</strong>, which hosts the site. GitHub may log visitors' IP addresses for security and operations. See the <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">GitHub Privacy Statement</a>.</li>
+        <li><strong>Google Fonts</strong>, which serves the Geist typeface. See the <a href="https://developers.google.com/fonts/faq/privacy">Google Fonts privacy FAQ</a>.</li>
+        <li><strong>OpenStreetMap</strong>, which serves the map tiles for the demo map. See the <a href="https://osmfoundation.wiki/wiki/Privacy_Policy">OpenStreetMap Foundation privacy policy</a>.</li>
+      </ul>
+      <p>The demo map only moves the map on the page. It never touches anyone's phone.</p>
+
+      <h2>The friends area</h2>
+      <p>The friends page is encrypted. Your password is checked in your own browser and is never sent anywhere. If you press <strong>Jump here</strong>, your browser sends that place's coordinates straight to Location Jump running on your own Mac (at 127.0.0.1). Nothing goes to us or to any other server.</p>
+
+      <h2>The Mac app</h2>
+      <p>The app only listens on your own Mac, so nobody else on your network can open it. It keeps your favorites and recent places in a file on your Mac (<code>saved_places.json</code>) and one display setting in your browser. To do its job it contacts:</p>
+      <ul>
+        <li><strong>Your iPhone</strong>, over USB or your local Wi-Fi, through Apple's developer connection.</li>
+        <li><strong>OpenStreetMap</strong> map tiles, and <strong>Nominatim</strong> when you search for a place. Your search text is sent to Nominatim to find it.</li>
+        <li><strong>routing.openstreetmap.de</strong> when you use walk, bike or drive mode. The start and end of the route are sent to it.</li>
+        <li><strong>Apple and GitHub</strong> the first time you use a new iOS version: the Developer Disk Image is downloaded and signed for your device, which shares device identifiers with Apple's signing server, the same way Xcode does.</li>
+      </ul>
+      <p>Each of these services has its own privacy policy. We don't receive any of this information.</p>
+
+      <h2>Children</h2>
+      <p>Location Jump isn't directed at children under 13, and we don't knowingly collect information from anyone, of any age.</p>
+
+      <h2>Changes</h2>
+      <p>If this policy changes, the new version will be posted on this page with a new date. The full history is in the project's <a href="https://github.com/IggyDuenas/location-jump/commits/main/site/privacy.html">GitHub repository</a>.</p>
+
+      <h2>Contact</h2>
+      <p>Questions about privacy? Please <a href="https://github.com/IggyDuenas/location-jump/issues">open an issue on GitHub</a>.</p>
+
+    </article>
+  </main>
+
+  <footer class="footer">
+    <div class="wrap footer-inner">
+      <div class="logo small">
+        <img src="icon.png" alt="" width="24" height="24">
+        <span>Location Jump</span>
+      </div>
+      <p>Free and open source under the <a href="https://github.com/IggyDuenas/location-jump/blob/main/LICENSE">MIT license</a>. Not affiliated with Apple or Snap.</p>
+      <nav class="footer-links" aria-label="Footer">
+        <a href="privacy.html" aria-current="page">Privacy</a>
+        <a href="terms.html">Terms</a>
+        <a href="./#faq">FAQ</a>
+        <a href="https://github.com/IggyDuenas/location-jump">GitHub</a>
+      </nav>
+    </div>
+  </footer>
+</body>
+</html>
