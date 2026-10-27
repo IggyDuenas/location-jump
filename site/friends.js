@@ -61,4 +61,17 @@
     content.hidden = false;
     content.focus();
   });
+
+  // Copy buttons on the menu's coordinates.
+  document.getElementById("content").addEventListener("click", async (e) => {
+    const copy = e.target.closest("button[data-copy]");
+    if (!copy) return;
+    try {
+      await navigator.clipboard.writeText(copy.dataset.copy);
+      copy.textContent = "Copied";
+    } catch {
+      copy.textContent = "Select it";
+    }
+    setTimeout(() => (copy.textContent = "Copy"), 1600);
+  });
 })();
