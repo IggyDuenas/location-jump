@@ -9,6 +9,14 @@
 #                          dialogs and notifications, and keeps the app running in the background
 set -euo pipefail
 
+# On Apple silicon the app can end up running in Intel mode (Rosetta), where Apple's Python
+# can't start ("missing compatible architecture"). Switch back to native mode first.
+if [[ "$(uname)" == "Darwin" && -z "${LJ_NATIVE:-}" ]] \
+   && [[ "$(sysctl -in sysctl.proc_translated 2>/dev/null)" == "1" ]]; then
+  export LJ_NATIVE=1
+  exec arch -arm64 /bin/bash "$0" "$@"
+fi
+
 cd "$(dirname "$0")"
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
 
@@ -52,9 +60,9 @@ running_port() {
 }
 
 # --- 1. Python ------------------------------------------------------------------------------
-if [[ "$(uname)" != "Darwin" ]]; then
-  warn "This tool is meant for macOS. Continuing anyway, but the tunnel steps may differ."
-fi
+# Location Jump is built for Macs with Apple silicon (M1 or later, or the A-series MacBook Neo).
+[[ "$(uname)" == "Darwin" ]] || die "Location Jump only runs on a Mac."
+[[ "$(uname -m)" == "arm64" ]] || die "Location Jump needs a Mac with Apple silicon (M1 or later, or MacBook Neo). This Mac has an Intel processor."
 
 # Apps opened from Launchpad don't get Terminal's PATH, and a leftover Homebrew or python.org
 # link can be broken, so try every usual place and use the first Python 3.9+ that runs.
@@ -101,16 +109,6 @@ fi
 
 # --- 2. iOS 17+ tunnel ----------------------------------------------------------------------
 tunnel_running() { curl -fsS --max-time 2 "$TUNNELD_URL" >/dev/null 2>&1; }
-SERVICE_PLIST="/Library/LaunchDaemons/com.github.iggyduenas.locationjump.tunneld.plist"
-
-if [[ -f "$SERVICE_PLIST" ]] && ! tunnel_running; then
-  # The always-on tunnel service is installed; it may still be starting (e.g. right after boot).
-  say "Waiting for the tunnel service to start…"
-  for _ in $(seq 1 15); do
-    tunnel_running && break
-    sleep 1
-  done
-fi
 
 if tunnel_running; then
   say "iOS tunnel is already running."
@@ -134,7 +132,6 @@ else
   done
   if tunnel_running; then
     say "Tunnel started. It keeps running in the background until you restart your Mac or run ./stop.sh."
-    echo "    Tip: run ./tunnel-service.sh install once and you'll never be asked for your password again."
   elif (( ! BACKGROUND )); then
     die "The tunnel didn't start. Try running it in the foreground to see the error:
     sudo .venv/bin/python -m pymobiledevice3 remote tunneld"

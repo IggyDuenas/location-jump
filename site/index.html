@@ -95,7 +95,7 @@
     <!-- Hero -->
     <section class="hero" id="top">
       <div class="wrap hero-inner">
-        <p class="pill"><span class="dot"></span>Free and open source · macOS 11+ · iOS 17+</p>
+        <p class="pill"><span class="dot"></span>Free and open source · Apple silicon Macs · iOS 17+</p>
         <h1 class="hero-title">Your iPhone, anywhere,<br> right from your Mac</h1>
         <p class="lead">Pick a spot on a map, jump to a famous landmark, or walk there along real streets. Every app on your phone sees the new location, and one click brings back the real one.</p>
         <div class="cta">
@@ -248,7 +248,7 @@
         <div class="head reveal">
           <p class="kicker">Get started</p>
           <h2>Up and running in about ten minutes</h2>
-          <p class="sub">You need a Mac (macOS 11 or later), an iPhone on iOS 17 or later, and a USB cable.</p>
+          <p class="sub">You need a Mac with Apple silicon (M1 or later, or MacBook Neo), an iPhone on iOS 17 or later, and a USB cable.</p>
         </div>
         <ol class="steps">
           <li class="card step reveal">
@@ -273,9 +273,8 @@ cd location-jump</code></pre></div>
             <span class="num">3</span>
             <div>
               <h3>Install it once</h3>
-              <p>This sets up the secure connection (it asks for your Mac password once, so use an administrator account) and adds the app to Launchpad.</p>
-              <div class="code"><div class="code-bar"><span>Terminal</span><button class="copy" type="button" aria-label="Copy commands"><svg class="ic" aria-hidden="true"><use href="#i-copy"/></svg><span>Copy</span></button></div><pre><code>./tunnel-service.sh install
-./install-app.sh</code></pre></div>
+              <p>This adds the app to Launchpad. When it starts, it asks for your Mac password to set up the secure connection, so use an administrator account.</p>
+              <div class="code"><div class="code-bar"><span>Terminal</span><button class="copy" type="button" aria-label="Copy commands"><svg class="ic" aria-hidden="true"><use href="#i-copy"/></svg><span>Copy</span></button></div><pre><code>./install-app.sh</code></pre></div>
             </div>
           </li>
           <li class="card step reveal">
@@ -348,15 +347,15 @@ cd location-jump</code></pre></div>
           </details>
           <details>
             <summary>What if my Mac account isn't an administrator?</summary>
-            <p>The secure connection to iOS 17 needs administrator rights. Ask an administrator to run <code>./tunnel-service.sh install</code> once, or skip that step and have an administrator type their name and password when Location Jump starts.</p>
+            <p>The secure connection to iOS 17 needs administrator rights. Have an administrator type their name and password when Location Jump starts.</p>
           </details>
           <details>
             <summary>How do I update it?</summary>
-            <p>In Terminal, go to the <code>location-jump</code> folder and run <code>git pull</code>, then quit and reopen Location Jump. If <code>requirements.txt</code> changed, also run <code>./tunnel-service.sh install</code> again.</p>
+            <p>In Terminal, go to the <code>location-jump</code> folder and run <code>git pull</code>, then quit and reopen Location Jump.</p>
           </details>
           <details>
-            <summary>Does it work on Windows or Linux, or with Android?</summary>
-            <p>Not today. Location Jump is built for macOS and for iPhones and iPads on iOS 17 or later.</p>
+            <summary>Does it work on an Intel Mac, Windows or Linux, or with Android?</summary>
+            <p>No. Location Jump is built for Macs with Apple silicon (M1 or later, or MacBook Neo) and for iPhones and iPads on iOS 17 or later.</p>
           </details>
           <details>
             <summary>How much does it cost?</summary>

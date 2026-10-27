@@ -49,7 +49,7 @@ jobs:
       - run: python -m pytest -q
 
   macos:
-    name: macOS (tests, app bundle, tunnel service, start.sh)
+    name: macOS (tests, app bundle, start.sh)
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v5
@@ -71,14 +71,7 @@ jobs:
           ./install-app.sh --uninstall
           test ! -e "$APP"
 
-      # GitHub's macOS runners allow sudo without a password, so the real LaunchDaemon can be tested.
-      - name: Install the tunnel service
-        run: |
-          ./tunnel-service.sh install
-          ./tunnel-service.sh status
-          curl -fsS http://127.0.0.1:49151 && echo
-
-      - name: start.sh smoke test (no password needed with the service running)
+      - name: start.sh smoke test (GitHub's macOS runners allow sudo without a password)
         run: |
           ./start.sh > start.log 2>&1 &
           for _ in $(seq 1 120); do
@@ -94,14 +87,7 @@ jobs:
           done
           echo "App never answered"; cat start.log; exit 1
 
-      - name: Remove the tunnel service
-        if: always()
-        run: |
-          ./tunnel-service.sh uninstall
-          ./tunnel-service.sh status
-
       - name: Logs (on failure)
         if: failure()
         run: |
           cat start.log || true
-          sudo cat /Library/Logs/LocationJump-tunnel.log || true
