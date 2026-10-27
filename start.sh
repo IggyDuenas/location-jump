@@ -60,9 +60,9 @@ running_port() {
 }
 
 # --- 1. Python ------------------------------------------------------------------------------
-if [[ "$(uname)" != "Darwin" ]]; then
-  warn "This tool is meant for macOS. Continuing anyway, but the tunnel steps may differ."
-fi
+# Location Jump is built for Macs with Apple silicon (M1 or later, or the A-series MacBook Neo).
+[[ "$(uname)" == "Darwin" ]] || die "Location Jump only runs on a Mac."
+[[ "$(uname -m)" == "arm64" ]] || die "Location Jump needs a Mac with Apple silicon (M1 or later, or MacBook Neo). This Mac has an Intel processor."
 
 # Apps opened from Launchpad don't get Terminal's PATH, and a leftover Homebrew or python.org
 # link can be broken, so try every usual place and use the first Python 3.9+ that runs.

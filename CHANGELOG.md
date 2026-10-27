@@ -9,6 +9,7 @@ All notable changes to Location Jump. Versions follow [semantic versioning](http
 - **"Python 3 isn't installed" when opening the app**, even though Python worked in Terminal. Apps opened from Launchpad don't get Terminal's PATH, and a broken leftover Homebrew or python.org link could be picked first. `start.sh` now tries every usual Python location, uses the first 3.9+ that runs, and logs why Apple's `python3` failed with a message that points at the real fix (install the tools, accept the Xcode license, or install from python.org).
 
 ### Removed
+- **Intel Macs and other systems.** Location Jump now targets Macs with Apple silicon only (M1 or later, including the A-series MacBook Neo). `start.sh` and `install-app.sh` stop with a clear message elsewhere, and the app always runs natively, never in Rosetta.
 - **The tunnel service (`tunnel-service.sh`)** is gone, to keep setup simple. The app and `start.sh` start the iOS 17 tunnel when needed and ask for your Mac password once per restart. If you installed it, remove it with: `sudo launchctl bootout system /Library/LaunchDaemons/com.github.iggyduenas.locationjump.tunneld.plist; sudo rm -f /Library/LaunchDaemons/com.github.iggyduenas.locationjump.tunneld.plist; sudo rm -rf "/Library/Application Support/LocationJump"`
 
 ### Changed

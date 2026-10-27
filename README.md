@@ -10,14 +10,14 @@
 <p align="center">
   <a href="https://github.com/iggyduenas/location-jump/actions/workflows/ci.yml"><img src="https://github.com/iggyduenas/location-jump/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <img src="https://img.shields.io/badge/version-1.1.0-007a0f" alt="Version 1.1.0">
-  <img src="https://img.shields.io/badge/macOS-11%2B-lightgrey" alt="macOS 11+">
+  <img src="https://img.shields.io/badge/macOS-11%2B%20%C2%B7%20Apple%20silicon-lightgrey" alt="macOS 11+ on Apple silicon">
   <img src="https://img.shields.io/badge/iOS-17%2B-lightgrey" alt="iOS 17+">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License: MIT"></a>
 </p>
 
 <p align="center"><b>Website: <a href="https://iggyduenas.github.io/location-jump/">iggyduenas.github.io/location-jump</a></b></p>
 
-A small Mac tool that sets the GPS location of your USB-connected iPhone (iOS 17 or later) from a web page on your Mac. Pick a spot on a map, or hit **Random Location** to jump to one of 55 famous places. Your phone then reports that location to every app, including Snap Map.
+A small tool for Apple silicon Macs that sets the GPS location of your USB-connected iPhone (iOS 17 or later) from a web page on your Mac. Pick a spot on a map, or hit **Random Location** to jump to one of 55 famous places. Your phone then reports that location to every app, including Snap Map.
 
 ![Location Jump showing the Eiffel Tower](docs/screenshots/main.png)
 
@@ -34,7 +34,7 @@ A small Mac tool that sets the GPS location of your USB-connected iPhone (iOS 17
 
 ## What you need
 
-- A Mac (any recent macOS) and a USB cable for your iPhone
+- A Mac with **Apple silicon** (M1 or later, or MacBook Neo) on macOS 11 or later, and a USB cable for your iPhone. Intel Macs aren't supported.
 - An iPhone running **iOS 17 or later**
 - About 10 minutes for the first setup
 

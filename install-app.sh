@@ -21,6 +21,8 @@ if [[ "${1:-}" == "--uninstall" ]]; then
 fi
 
 [[ "$(uname)" == "Darwin" ]] || { echo "This builds a macOS app, so it has to run on a Mac."; exit 1; }
+[[ "$(uname -m)" == "arm64" || "$(sysctl -in sysctl.proc_translated 2>/dev/null)" == "1" ]] \
+  || { echo "Location Jump needs a Mac with Apple silicon (M1 or later, or MacBook Neo)."; exit 1; }
 
 echo "==> Building $APP"
 rm -rf "$APP"
@@ -56,9 +58,10 @@ cat > "$APP/Contents/Info.plist" <<EOF
   <key>CFBundleShortVersionString</key><string>$VERSION</string>
   <key>CFBundleVersion</key><string>1</string>
   <key>LSMinimumSystemVersion</key><string>11.0</string>
-  <!-- The launcher is a script, so macOS can't tell which chip it's for and may pick Intel
-       (Rosetta). Prefer native Apple silicon. -->
-  <key>LSArchitecturePriority</key><array><string>arm64</string><string>x86_64</string></array>
+  <!-- Apple silicon only. The launcher is a script, so macOS can't tell which chip it's for
+       and may pick Intel mode (Rosetta), where Apple's Python can't start. -->
+  <key>LSArchitecturePriority</key><array><string>arm64</string></array>
+  <key>LSRequiresNativeExecution</key><true/>
   <!-- The launcher only starts the background server and opens your browser, then exits,
        so it shouldn't sit in the Dock. -->
   <key>LSUIElement</key><true/>
