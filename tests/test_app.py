@@ -587,15 +587,9 @@ def test_only_localhost_host_header(client, host, ok):
     assert (r.status_code == 200) is ok
 
 
-def test_tunnel_hint_depends_on_the_service(monkeypatch, tmp_path):
-    monkeypatch.setattr(phone, "TUNNEL_SERVICE_PLIST", str(tmp_path / "missing.plist"))
+def test_tunnel_hint_says_how_to_start_it():
     msg = phone.explain(pmd_exc.TunneldConnectionError()).message
-    assert "./start.sh" in msg and "tunnel-service.sh install" in msg
-    plist = tmp_path / "svc.plist"
-    plist.write_text("x")
-    monkeypatch.setattr(phone, "TUNNEL_SERVICE_PLIST", str(plist))
-    msg = phone.explain(pmd_exc.TunneldConnectionError()).message
-    assert "tunnel-service.sh restart" in msg and "password" not in msg
+    assert "./start.sh" in msg and "password" in msg
 
 
 # ---------- Wi-Fi mode / device discovery ----------

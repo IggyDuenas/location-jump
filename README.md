@@ -80,23 +80,6 @@ The script does everything for you, explaining each step as it goes:
 
 > **Port 5000 note:** On newer Macs, the AirPlay Receiver already uses port 5000. If so, `start.sh` tells you and uses **http://localhost:5001** instead. To get 5000 back, turn off *System Settings → General → AirDrop & Handoff → AirPlay Receiver*.
 
-## Optional: never type your password again (tunnel service)
-
-By default the tunnel stops when your Mac restarts, so `./start.sh` (or the app) asks for your password again. To have it start automatically instead, run this once:
-
-```bash
-./tunnel-service.sh install
-```
-
-It asks for your password one last time and sets the tunnel up as a macOS background service. macOS then starts it at every boot and restarts it if it ever crashes.
-
-- `./tunnel-service.sh status`: is it installed and running?
-- `./tunnel-service.sh restart`: restart it if the app says the tunnel is stuck.
-- `./tunnel-service.sh install` again: update it (for example after a `git pull` that changes `requirements.txt`).
-- `./tunnel-service.sh uninstall`: remove it and go back to starting the tunnel on demand.
-
-Why it's safe: the service has to run with administrator rights (creating the tunnel needs them), so it does **not** run code from your project folder, which any program running as you could change. Instead it gets its own copy of pymobiledevice3 in `/Library/Application Support/LocationJump`, which only an administrator can modify. Its log is at `/Library/Logs/LocationJump-tunnel.log`.
-
 ## Optional: start it without Terminal (Location Jump.app)
 
 Run this once, in Terminal, inside the `location-jump` folder:
@@ -146,7 +129,7 @@ Good to know:
 ## Step 5: When you're done
 
 1. Press **Quit** at the top right of the page (or **Reset to Real Location**, or Ctrl+C in Terminal).
-2. Optionally stop the background tunnel with `./stop.sh` (it asks for your password). Restarting your Mac stops it too. If you installed the tunnel service, it stays on; that's the point of it.
+2. Optionally stop the background tunnel with `./stop.sh` (it asks for your password). Restarting your Mac stops it too.
 
 ---
 
@@ -159,8 +142,8 @@ Good to know:
 | **Your iPhone doesn't trust this Mac yet** / **You tapped "Don't Trust"** | Unplug and replug the cable, then tap **Trust**. If the prompt never appears: *Settings → General → Transfer or Reset iPhone → Reset → Reset Location & Privacy*, then replug. |
 | **Unlock your iPhone** | Unlock it with your passcode and try again. |
 | **Developer Mode is off** | See Step 1.2 above. The phone has to restart after turning it on. |
-| **The iOS 17 tunnel isn't running** | Open the app again or run `./start.sh` (it starts the tunnel). With the tunnel service installed: `./tunnel-service.sh restart`, and check `/Library/Logs/LocationJump-tunnel.log`. |
-| **The tunnel is running but hasn't reached your iPhone yet** | Keep the phone unlocked and plugged in for ~10 seconds. Still stuck? Run `./stop.sh`, then `./start.sh` (or `./tunnel-service.sh restart` if you installed the service). |
+| **The iOS 17 tunnel isn't running** | Open the app again or run `./start.sh` (it starts the tunnel). |
+| **The tunnel is running but hasn't reached your iPhone yet** | Keep the phone unlocked and plugged in for ~10 seconds. Still stuck? Run `./stop.sh`, then `./start.sh`. |
 | **Couldn't download the Developer Disk Image** | The first Set Location needs internet on the Mac. Check your connection and try again. |
 | **Lost the connection to the iPhone** | Usually the cable wiggled or the phone locked during setup. Just press the button again; the tool reconnects automatically. |
 | **Reconnecting to iPhone…** stays on | Plug the phone back in and unlock it. If it still doesn't recover after ~30 seconds, run `./stop.sh` then `./start.sh`, and your fake location comes back once the app reconnects. |
@@ -168,7 +151,7 @@ Good to know:
 | **Couldn't reach the place search** | Search needs internet on your Mac. You can still click the map or use Random. |
 | Browser shows **"403 Forbidden"** at localhost:5000 | That's the Mac's AirPlay Receiver, not this app. Use the address `start.sh` printed (probably http://localhost:5001). |
 | App says **Python 3 isn't installed** | Run `xcode-select --install`, then `python3 --version`. If that doesn't print 3.9 or newer, install Python from [python.org](https://www.python.org/downloads/macos/). The real reason is in `~/Library/Logs/LocationJump.log`. |
-| `tunnel-service.sh` says **Administrator access is needed** / *may not run sudo* | Your Mac account isn't an administrator. Log in as one and run `./tunnel-service.sh install`, or skip the service and have an administrator enter their name and password when the app starts. |
+| Asked for a password your account doesn't have / *may not run sudo* | Your Mac account isn't an administrator. Creating the iOS 17 tunnel needs one, so have an administrator enter their name and password when the app starts. |
 | Phone seems stuck on a fake location | Press **Reset to Real Location**. If the tool isn't running anymore, simply **restart the iPhone**; that always restores the real GPS. |
 
 To see the tunnel's own log while debugging, stop it (`./stop.sh`) and run it in the foreground:
@@ -192,7 +175,6 @@ Browser (map UI) ──HTTP──► Flask app (app.py) ──► phone.py ─�
 - **`templates/` + `static/`**: the web page. The map library (Leaflet) is bundled in `static/vendor/`, so the app works offline; only the map tiles, search and street routes need internet.
 - **`tests/`**: automated tests that use a pretend iPhone.
 
-- **`tunnel-service.sh`**: installs the tunnel as an always-on LaunchDaemon with its own root-owned copy of pymobiledevice3.
 - **`install-app.sh`** + **`assets/AppIcon.png`**: build the Location Jump.app launcher (which runs `start.sh --background`).
 
 The web app only listens on `127.0.0.1`, so nobody else on your Wi-Fi can open it. It also refuses requests that other websites might try to send to it from your browser: every change must come from its own page as JSON, and requests addressed to any host other than `localhost` are rejected. The one exception is the project website (`https://iggyduenas.github.io`): its friends area may check that the app is running and set a location (`/api/ping` and `/api/location` only), after your browser asks you to allow it.
@@ -205,7 +187,7 @@ make check     # lint (ruff, shellcheck, JS syntax) + all tests
 make test      # just the tests
 ```
 
-- **CI** (`.github/workflows/ci.yml`) runs on every push to `main` and every pull request: linting, the tests on Python 3.9 (what macOS ships), 3.11 and 3.13, and on a real macOS machine it builds the app bundle, installs and removes the tunnel service, and smoke-tests `start.sh`.
+- **CI** (`.github/workflows/ci.yml`) runs on every push to `main` and every pull request: linting, the tests on Python 3.9 (what macOS ships), 3.11 and 3.13, and on a real macOS machine it builds the app bundle and smoke-tests `start.sh`.
 - **Stress test**: `python scripts/stress_test.py` runs the real server with 40 clients against a deliberately unreliable pretend iPhone (slow, dropping, hanging, unplugging) and checks it stays responsive and correct. Options: `--clients`, `--seconds`.
 - **Website**: the project site lives in `site/`. `python scripts/build_site.py` assembles it into `_site/`, and the *Website* workflow publishes it to GitHub Pages on every push to `main` that changes it.
 - **Screenshots**: run the *Screenshots* workflow from the Actions tab (or `python scripts/screenshots.py` locally) to regenerate the images in `docs/screenshots/` with a pretend iPhone.

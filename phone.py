@@ -13,7 +13,6 @@ import asyncio
 import contextlib
 import logging
 import math
-import os
 import random
 import threading
 import time
@@ -30,16 +29,12 @@ from pymobiledevice3.usbmux import list_devices
 log = logging.getLogger(__name__)
 
 TUNNEL_START_CMD = "sudo .venv/bin/python -m pymobiledevice3 remote tunneld -d"
-TUNNEL_SERVICE_PLIST = "/Library/LaunchDaemons/com.github.iggyduenas.locationjump.tunneld.plist"
 
 
 def tunnel_fix_hint() -> str:
-    """How to get the tunnel going again, depending on whether the always-on service is installed."""
-    if os.path.exists(TUNNEL_SERVICE_PLIST):
-        return ("Restart the tunnel service: open Terminal in the Location Jump folder and run "
-                "./tunnel-service.sh restart")
+    """How to get the tunnel going again."""
     return ("Open Location Jump again (or run ./start.sh) and enter your Mac password when asked; or in Terminal "
-            f"run: {TUNNEL_START_CMD}. Tip: ./tunnel-service.sh install keeps it running so you're never asked again.")
+            f"run: {TUNNEL_START_CMD}")
 
 
 class PhoneError(Exception):
@@ -489,8 +484,7 @@ class PhoneController:
                 "The tunnel is running but isn't connected to your iPhone yet. Keep it unlocked (and "
                 "plugged in, or on the same Wi-Fi in Wi-Fi mode), wait a few seconds, then try again. "
                 "If this keeps happening, restart the "
-                "tunnel: ./stop.sh then ./start.sh (or ./tunnel-service.sh restart if you installed the "
-                "tunnel service).",
+                "tunnel: ./stop.sh then ./start.sh.",
                 "tunnel_waiting",
             )
 

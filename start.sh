@@ -101,16 +101,6 @@ fi
 
 # --- 2. iOS 17+ tunnel ----------------------------------------------------------------------
 tunnel_running() { curl -fsS --max-time 2 "$TUNNELD_URL" >/dev/null 2>&1; }
-SERVICE_PLIST="/Library/LaunchDaemons/com.github.iggyduenas.locationjump.tunneld.plist"
-
-if [[ -f "$SERVICE_PLIST" ]] && ! tunnel_running; then
-  # The always-on tunnel service is installed; it may still be starting (e.g. right after boot).
-  say "Waiting for the tunnel service to start…"
-  for _ in $(seq 1 15); do
-    tunnel_running && break
-    sleep 1
-  done
-fi
 
 if tunnel_running; then
   say "iOS tunnel is already running."
@@ -134,7 +124,6 @@ else
   done
   if tunnel_running; then
     say "Tunnel started. It keeps running in the background until you restart your Mac or run ./stop.sh."
-    echo "    Tip: run ./tunnel-service.sh install once and you'll never be asked for your password again."
   elif (( ! BACKGROUND )); then
     die "The tunnel didn't start. Try running it in the foreground to see the error:
     sudo .venv/bin/python -m pymobiledevice3 remote tunneld"
