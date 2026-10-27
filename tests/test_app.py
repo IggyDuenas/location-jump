@@ -118,6 +118,37 @@ def test_set_location(client, controller):
     assert controller.fake_sim.calls == [("set", 48.8584, 2.2945)]
 
 
+SITE = "https://iggyduenas.github.io"
+
+
+def test_website_may_set_location(client, controller):
+    pre = client.options("/api/location", headers={
+        "Origin": SITE, "Access-Control-Request-Method": "POST",
+        "Access-Control-Request-Headers": "content-type", "Access-Control-Request-Private-Network": "true"})
+    assert pre.status_code == 204
+    assert pre.headers["Access-Control-Allow-Origin"] == SITE
+    assert pre.headers["Access-Control-Allow-Private-Network"] == "true"
+    r = client.post("/api/location", json={"lat": 25.762, "lon": -80.40222, "label": "Park"}, headers={"Origin": SITE})
+    assert r.status_code == 200 and r.headers["Access-Control-Allow-Origin"] == SITE
+    assert controller.fake_sim.calls == [("set", 25.762, -80.40222)]
+    assert client.get("/api/ping", headers={"Origin": SITE}).headers["Access-Control-Allow-Origin"] == SITE
+
+
+@pytest.mark.parametrize("origin,method,path", [
+    ("https://evil.example", "POST", "/api/location"),     # any other website
+    ("https://iggyduenas.github.io.evil.example", "POST", "/api/location"),
+    ("http://iggyduenas.github.io", "POST", "/api/location"),  # not https
+    (SITE, "POST", "/api/reset"),                             # the website, but another endpoint
+    (SITE, "POST", "/api/walk"),
+    (SITE, "GET", "/api/favorites"),
+])
+def test_other_sites_and_endpoints_get_no_cors(client, origin, method, path):
+    # Without these headers the browser refuses to send the request, as before.
+    pre = client.options(path, headers={"Origin": origin, "Access-Control-Request-Method": method})
+    assert "Access-Control-Allow-Origin" not in pre.headers
+    assert "Access-Control-Allow-Origin" not in client.post(path, json={}, headers={"Origin": origin}).headers
+
+
 @pytest.mark.parametrize("payload", [{}, {"lat": "abc", "lon": 1}, {"lat": 91, "lon": 0}, {"lat": 0, "lon": -181}])
 def test_set_location_rejects_bad_input(client, payload):
     r = client.post("/api/location", json=payload)

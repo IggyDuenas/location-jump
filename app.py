@@ -25,6 +25,10 @@ DEFAULT_DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sa
 
 
 LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
+# The project website's friends area may check that the app is running and set a location,
+# and nothing else. Every other endpoint stays limited to the app's own page.
+WEBSITE_ORIGINS = {"https://iggyduenas.github.io"}
+WEBSITE_PATHS = {"/api/ping": "GET", "/api/location": "POST"}
 
 
 def _stop_server() -> None:
@@ -57,7 +61,27 @@ def create_app(controller=None, saved=None, searcher=None, router=None, on_quit=
             return fail(PhoneError("Location Jump only accepts requests from this Mac.", "forbidden"), 403)
         if request.method not in ("GET", "HEAD", "OPTIONS") and not request.is_json:
             return fail(PhoneError("Requests must be sent from the Location Jump page.", "forbidden"), 415)
+        if request.method == "OPTIONS" and website_may_call():
+            # The browser asks first before the website sends JSON to this Mac; say yes.
+            return app.response_class(status=204)
         return None
+
+    def website_may_call() -> bool:
+        return (request.headers.get("Origin") in WEBSITE_ORIGINS
+                and request.path in WEBSITE_PATHS
+                and request.method in (WEBSITE_PATHS[request.path], "OPTIONS"))
+
+    @app.after_request
+    def allow_website(response):
+        if website_may_call():
+            response.headers["Access-Control-Allow-Origin"] = request.headers["Origin"]
+            response.headers["Access-Control-Allow-Methods"] = WEBSITE_PATHS[request.path]
+            response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+            # Chrome asks this before a public website may reach a server on this Mac.
+            response.headers["Access-Control-Allow-Private-Network"] = "true"
+            response.headers["Access-Control-Max-Age"] = "600"
+        response.headers.add("Vary", "Origin")
+        return response
 
     @app.get("/api/ping")
     def ping():
