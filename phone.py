@@ -6,6 +6,10 @@ event loop on a background thread, and Flask calls into it through small blockin
 Important detail: on iOS 17+ the simulated location only stays in effect while the
 developer (DVT) connection that set it is open. That's why we keep one long-lived session
 open after "Set Location" instead of connecting, setting and disconnecting.
+
+iOS 17 only allows developer connections through an encrypted tunnel. We build that tunnel
+inside this process, so no administrator password is ever needed: iOS 17.4+ gets its own
+in-process tunnel, and iOS 17.0-17.3 rides the one macOS already keeps for the phone.
 """
 from __future__ import annotations
 
@@ -20,21 +24,26 @@ from typing import Any, Optional
 
 from pymobiledevice3 import exceptions as pmd_exc
 from pymobiledevice3.lockdown import create_using_usbmux
+from pymobiledevice3.remote.native_tunnel import NativeRemotedTunnel
+from pymobiledevice3.remote.userspace_tunnel import UserspaceRsdTunnel
 from pymobiledevice3.services.dvt.instruments.dvt_provider import DvtProvider
 from pymobiledevice3.services.dvt.instruments.location_simulation import LocationSimulation
 from pymobiledevice3.services.mobile_image_mounter import auto_mount
-from pymobiledevice3.tunneld.api import get_tunneld_device_by_udid, get_tunneld_tunnels
 from pymobiledevice3.usbmux import list_devices
 
 log = logging.getLogger(__name__)
 
-TUNNEL_START_CMD = "sudo .venv/bin/python -m pymobiledevice3 remote tunneld -d"
 
 
-def tunnel_fix_hint() -> str:
-    """How to get the tunnel going again."""
-    return ("Open Location Jump again (or run ./start.sh) and enter your Mac password when asked; or in Terminal "
-            f"run: {TUNNEL_START_CMD}")
+async def open_tunnel(udid: str) -> tuple[Any, Any]:
+    """Open the iOS 17 tunnel to this phone, without root: (handle to close, connected RSD)."""
+    tunnel: Any = UserspaceRsdTunnel(serial=udid, remotepairing_fallback=False)
+    try:
+        return tunnel, await tunnel.aopen()
+    except pmd_exc.UserspaceTunnelUnavailableError:
+        pass  # iOS 17.0-17.3 has no in-process tunnel; use the one macOS keeps for the phone
+    tunnel = NativeRemotedTunnel(serial=udid)
+    return tunnel, await tunnel.aopen()
 
 
 class PhoneError(Exception):
@@ -50,8 +59,10 @@ def explain(exc: BaseException) -> PhoneError:
     """Turn any exception from pymobiledevice3 into a plain-English PhoneError."""
     if isinstance(exc, PhoneError):
         return exc
-    if isinstance(exc, pmd_exc.TunneldConnectionError):
-        return PhoneError(f"The iOS 17 tunnel isn't running. {tunnel_fix_hint()}", "no_tunnel")
+    if isinstance(exc, pmd_exc.UserspaceTunnelUnavailableError):
+        return PhoneError("Couldn't open the secure connection to your iPhone. Keep it plugged in and unlocked, "
+                          "then try again. If it keeps happening, update the iPhone to iOS 17.4 or later.",
+                          "no_tunnel")
     if isinstance(exc, (pmd_exc.NoDeviceConnectedError, pmd_exc.DeviceNotFoundError,
                         pmd_exc.ConnectionFailedToUsbmuxdError)):
         return PhoneError(
@@ -312,16 +323,6 @@ class PhoneController:
             return None, None
         return phone["udid"], "USB" if phone["usb"] else "Network"
 
-    def _tunnel_key(self, udid: Optional[str], tunnels: dict) -> Optional[str]:
-        """tunneld's key for this phone (IDs may be written with or without dashes)."""
-        if not tunnels:
-            return None
-        udid = udid or self.selected
-        if udid is None:
-            # A Wi-Fi tunnel macOS itself doesn't list. Only use it if there's no doubt which phone it is.
-            return next(iter(tunnels)) if len(tunnels) == 1 else None
-        return next((k for k in tunnels if same_device(k, udid)), None)
-
     async def _describe(self, phone: dict) -> dict:
         """Name and iOS version for the device list (cached; asking a phone takes a moment)."""
         key = phone["udid"].replace("-", "")
@@ -358,24 +359,11 @@ class PhoneController:
             return result
         if udid is None and self.selected:
             chosen = self._names.get(self.selected.replace("-", ""), {}).get("name", "The iPhone you chose")
-            with contextlib.suppress(Exception):
-                if self._tunnel_key(None, await get_tunneld_tunnels()):
-                    result.update(connected=True, ready=True, message=f"Connected to {chosen} over Wi-Fi. Ready.",
-                                  device={"name": chosen, "ios": None, "udid": self.selected, "connection": "wifi",
-                                          "wifi_enabled": True})
-                    return result
             result.update(code="not_connected",
                           message=f"{chosen} isn't connected. Plug it in and unlock it (or pick another device at "
                                   "the top).")
             return result
         if udid is None:
-            # tunneld can also reach a phone over Wi-Fi on its own (Bonjour), without macOS listing it.
-            with contextlib.suppress(Exception):
-                if self._tunnel_key(None, await get_tunneld_tunnels()):
-                    result.update(connected=True, ready=True, message="Connected to your iPhone over Wi-Fi. Ready.",
-                                  device={"name": "iPhone", "ios": None, "udid": None, "connection": "wifi",
-                                          "wifi_enabled": True})
-                    return result
             result.update(code="not_connected",
                           message="No iPhone found. Plug it in with a USB cable and unlock it (or, with Wi-Fi mode "
                                   "on, keep it unlocked on the same Wi-Fi network as this Mac).")
@@ -407,20 +395,6 @@ class PhoneController:
         if not dev_mode:
             err = explain(pmd_exc.DeveloperModeIsNotEnabledError())
             result.update(code=err.code, message=err.message)
-            return result
-
-        try:
-            tunnels = await get_tunneld_tunnels()
-        except Exception as exc:
-            err = explain(exc)
-            result.update(code=err.code, message=err.message)
-            return result
-        if self._tunnel_key(udid, tunnels) is None:
-            how = "plugged in" if kind == "USB" else "on the same Wi-Fi network"
-            result.update(code="tunnel_waiting",
-                          message=f"The tunnel is running but hasn't reached your iPhone yet. Keep the phone "
-                                  f"unlocked and {how}; this usually takes a few seconds"
-                                  f"{'' if kind == 'USB' else ' (up to a minute over Wi-Fi)'}.")
             return result
 
         via = "" if kind == "USB" else " over Wi-Fi"
@@ -474,40 +448,30 @@ class PhoneController:
             return self._sim
 
         udid, _kind = await self._find_device()
-        key = self._tunnel_key(udid, await get_tunneld_tunnels())
-        if udid is None and key is None:
+        if udid is None:
             raise pmd_exc.NoDeviceConnectedError()
-
-        rsd = await get_tunneld_device_by_udid(key) if key else None
-        if rsd is None:
-            raise PhoneError(
-                "The tunnel is running but isn't connected to your iPhone yet. Keep it unlocked (and "
-                "plugged in, or on the same Wi-Fi in Wi-Fi mode), wait a few seconds, then try again. "
-                "If this keeps happening, restart the "
-                "tunnel: ./stop.sh then ./start.sh.",
-                "tunnel_waiting",
-            )
 
         stack = contextlib.AsyncExitStack()
         try:
-            await stack.enter_async_context(rsd)
-            if self._mounted_for != key:
+            tunnel, rsd = await open_tunnel(udid)
+            stack.push_async_callback(tunnel.aclose)  # also closes the RSD
+            if self._mounted_for != udid:
                 # Location simulation needs the Developer Disk Image mounted. This downloads it the
                 # first time (needs internet) and is a no-op if it's already mounted.
                 try:
                     await auto_mount(rsd)
                 except pmd_exc.AlreadyMountedError:
                     pass
-                self._mounted_for = key
+                self._mounted_for = udid
             dvt = await stack.enter_async_context(DvtProvider(rsd))
             sim = await stack.enter_async_context(LocationSimulation(dvt))
         except BaseException:
             await stack.aclose()
             raise
-        self._stack, self._sim, self._udid = stack, sim, key
+        self._stack, self._sim, self._udid = stack, sim, udid
         if self.selected is None:
             # Remember which phone we're spoofing, so plugging in a second one later changes nothing.
-            self.selected = udid or key
+            self.selected = udid
         return sim
 
     async def _push(self, lat: float, lon: float) -> None:
@@ -524,7 +488,7 @@ class PhoneController:
             except Exception as exc:
                 log.warning("set location failed (attempt %d): %r", attempt, exc)
                 await self._close_session()
-                if attempt == 2 or isinstance(exc, (pmd_exc.TunneldConnectionError,
+                if attempt == 2 or isinstance(exc, (pmd_exc.UserspaceTunnelUnavailableError,
                                                     pmd_exc.NoDeviceConnectedError,
                                                     pmd_exc.ConnectionFailedToUsbmuxdError,
                                                     pmd_exc.DeveloperModeIsNotEnabledError)):

@@ -217,17 +217,17 @@ def test_set_reconnects_once_after_dropped_connection(controller):
 
 def test_phone_errors_become_friendly_api_errors(client, controller, monkeypatch):
     async def no_tunnel():
-        raise pmd_exc.TunneldConnectionError()
+        raise pmd_exc.UserspaceTunnelUnavailableError()
 
     monkeypatch.setattr(controller, "_open_session", no_tunnel)
     r = client.post("/api/location", json={"lat": 1, "lon": 2})
     assert r.status_code == 503
     body = r.get_json()
-    assert body["code"] == "no_tunnel" and "sudo" in body["error"]
+    assert body["code"] == "no_tunnel" and "iOS 17.4" in body["error"] and "password" not in body["error"]
 
 
 @pytest.mark.parametrize("exc, code", [
-    (pmd_exc.TunneldConnectionError(), "no_tunnel"),
+    (pmd_exc.UserspaceTunnelUnavailableError(), "no_tunnel"),
     (pmd_exc.NoDeviceConnectedError(), "not_connected"),
     (pmd_exc.ConnectionFailedToUsbmuxdError(), "not_connected"),
     (pmd_exc.PairingDialogResponsePendingError(), "not_trusted"),
@@ -587,9 +587,35 @@ def test_only_localhost_host_header(client, host, ok):
     assert (r.status_code == 200) is ok
 
 
-def test_tunnel_hint_says_how_to_start_it():
-    msg = phone.explain(pmd_exc.TunneldConnectionError()).message
-    assert "./start.sh" in msg and "password" in msg
+class FakeTunnel:
+    opened = []
+
+    def __init__(self, serial=None, **kw):
+        self.serial = serial
+
+    async def aopen(self):
+        FakeTunnel.opened.append((type(self).__name__, self.serial))
+        return "rsd"
+
+    async def aclose(self):
+        pass
+
+
+def test_tunnel_needs_no_root_and_falls_back_for_older_ios(monkeypatch):
+    class Userspace(FakeTunnel):
+        async def aopen(self):
+            await super().aopen()
+            raise pmd_exc.UserspaceTunnelUnavailableError()  # iOS 17.0-17.3
+
+    class Native(FakeTunnel):
+        pass
+
+    FakeTunnel.opened = []
+    monkeypatch.setattr(phone, "UserspaceRsdTunnel", Userspace)
+    monkeypatch.setattr(phone, "NativeRemotedTunnel", Native)
+    tunnel, rsd = asyncio.run(phone.open_tunnel("ABC"))
+    assert isinstance(tunnel, Native) and rsd == "rsd"
+    assert FakeTunnel.opened == [("Userspace", "ABC"), ("Native", "ABC")]
 
 
 # ---------- Wi-Fi mode / device discovery ----------
@@ -625,8 +651,8 @@ class FakeLockdown:
 
 @pytest.fixture
 def devices(monkeypatch):
-    """Control what macOS and tunneld can see."""
-    world = {"mux": [], "tunnels": {}, "wifi": False, "rsd_asked": []}
+    """Control what macOS can see."""
+    world = {"mux": [], "wifi": False, "tunnel_asked": []}
     FakeLockdown.instances = []
 
     async def list_devices():
@@ -635,23 +661,18 @@ def devices(monkeypatch):
     async def create_using_usbmux(serial=None, connection_type=None, pair_timeout=None, **kw):
         return FakeLockdown(serial, connection_type, world["wifi"])
 
-    async def tunnels():
-        return world["tunnels"]
-
-    async def rsd_by_udid(udid):
-        world["rsd_asked"].append(udid)
-        return None
+    async def open_tunnel(udid):
+        world["tunnel_asked"].append(udid)
+        raise pmd_exc.UserspaceTunnelUnavailableError()
 
     monkeypatch.setattr(phone, "list_devices", list_devices)
     monkeypatch.setattr(phone, "create_using_usbmux", create_using_usbmux)
-    monkeypatch.setattr(phone, "get_tunneld_tunnels", tunnels)
-    monkeypatch.setattr(phone, "get_tunneld_device_by_udid", rsd_by_udid)
+    monkeypatch.setattr(phone, "open_tunnel", open_tunnel)
     return world
 
 
 def test_prefers_usb_when_the_phone_is_on_both(devices):
     devices["mux"] = [FakeMuxDevice("ABC", "Network"), FakeMuxDevice("ABC", "USB")]
-    devices["tunnels"] = {"ABC": [{}]}
     s = phone.PhoneController().status()
     assert s["ready"] and s["device"]["connection"] == "usb"
     assert FakeLockdown.instances[-1].connection_type == "USB"
@@ -659,17 +680,10 @@ def test_prefers_usb_when_the_phone_is_on_both(devices):
 
 def test_ready_over_wifi(devices):
     devices["mux"] = [FakeMuxDevice("ABC", "Network")]
-    devices["tunnels"] = {"ABC": [{}]}
     devices["wifi"] = True
     s = phone.PhoneController().status()
     assert s["ready"] and s["device"]["connection"] == "wifi" and "over Wi-Fi" in s["message"]
     assert FakeLockdown.instances[-1].connection_type == "Network"
-
-
-def test_wifi_tunnel_that_macos_does_not_list(devices):
-    devices["tunnels"] = {"XYZ": [{}]}
-    s = phone.PhoneController().status()
-    assert s["ready"] and s["device"]["connection"] == "wifi"
 
 
 def test_not_connected_mentions_wifi_mode(devices):
@@ -677,21 +691,14 @@ def test_not_connected_mentions_wifi_mode(devices):
     assert not s["connected"] and s["code"] == "not_connected" and "Wi-Fi mode" in s["message"]
 
 
-def test_tunnel_ids_match_with_or_without_dashes(devices):
-    devices["mux"] = [FakeMuxDevice("00008110001A2B3C", "USB")]
-    devices["tunnels"] = {"00008110-001A2B3C": [{}]}
+def test_tunnel_is_opened_for_the_phone_macos_lists(devices):
+    devices["mux"] = [FakeMuxDevice("00008110-001A2B3C", "USB")]
     c = phone.PhoneController()
-    assert c.status()["ready"]
+    assert c.status()["ready"]  # no separate tunnel to wait for
     with pytest.raises(phone.PhoneError) as info:
         c.set_location(1, 2)
-    assert info.value.code == "tunnel_waiting"
-    assert devices["rsd_asked"][0] == "00008110-001A2B3C"  # asked tunneld with its own spelling
-
-
-def test_tunnel_waiting_over_wifi_says_so(devices):
-    devices["mux"] = [FakeMuxDevice("ABC", "Network")]
-    s = phone.PhoneController().status()
-    assert s["code"] == "tunnel_waiting" and "same Wi-Fi network" in s["message"]
+    assert info.value.code == "no_tunnel"
+    assert devices["tunnel_asked"][0] == "00008110-001A2B3C"
 
 
 def test_set_wifi_needs_usb_and_flips_the_setting(devices, saved, searcher, router):
@@ -701,7 +708,6 @@ def test_set_wifi_needs_usb_and_flips_the_setting(devices, saved, searcher, rout
     r = client.post("/api/wifi", json={"enabled": False})
     assert r.status_code == 503 and r.get_json()["code"] == "needs_usb"
     devices["mux"] = [FakeMuxDevice("ABC", "USB")]
-    devices["tunnels"] = {"ABC": [{}]}
     client.post("/api/wifi", json={"enabled": True})
     flipped = [lk for lk in FakeLockdown.instances if lk.wifi]
     assert flipped and flipped[0].connection_type == "USB"
@@ -711,7 +717,6 @@ def test_set_wifi_needs_usb_and_flips_the_setting(devices, saved, searcher, rout
 
 def test_two_phones_and_no_choice_means_ask(devices):
     devices["mux"] = [FakeMuxDevice("AAA", "USB"), FakeMuxDevice("BBB", "USB")]
-    devices["tunnels"] = {"AAA": [{}], "BBB": [{}]}
     c = phone.PhoneController()
     s = c.status()
     assert not s["ready"] and s["code"] == "choose_device" and "2 devices" in s["message"]
@@ -723,14 +728,12 @@ def test_two_phones_and_no_choice_means_ask(devices):
 
 def test_same_phone_on_usb_and_wifi_is_listed_once(devices):
     devices["mux"] = [FakeMuxDevice("AAA", "USB"), FakeMuxDevice("AAA", "Network")]
-    devices["tunnels"] = {"AAA": [{}]}
     s = phone.PhoneController().status()
     assert s["ready"] and s["device"]["connection"] == "usb"
 
 
 def test_choosing_a_phone(devices, saved, searcher, router):
     devices["mux"] = [FakeMuxDevice("AAA", "USB"), FakeMuxDevice("BBB", "Network")]
-    devices["tunnels"] = {"AAA": [{}], "BBB": [{}]}
     c = phone.PhoneController()
     client = create_app(c, saved, searcher, router).test_client()
     body = client.post("/api/device", json={"udid": "BBB"}).get_json()
@@ -743,11 +746,9 @@ def test_choosing_a_phone(devices, saved, searcher, router):
 
 def test_chosen_phone_missing_waits_instead_of_switching(devices):
     devices["mux"] = [FakeMuxDevice("AAA", "USB"), FakeMuxDevice("BBB", "USB")]
-    devices["tunnels"] = {"AAA": [{}], "BBB": [{}]}
     c = phone.PhoneController()
     c.select_device("AAA")
     devices["mux"] = [FakeMuxDevice("BBB", "USB")]  # the chosen phone was unplugged...
-    devices["tunnels"] = {"BBB": [{}]}               # ...so its tunnel is gone too
     s = c.status()
     assert s["code"] == "not_connected" and "Iggy's iPhone isn't connected" in s["message"]
     assert c.run(c._find_device()) == (None, None)
@@ -764,7 +765,6 @@ def test_switching_phones_resets_the_old_one_first(controller, devices):
 
 def test_first_spoof_remembers_the_phone(devices, monkeypatch):
     devices["mux"] = [FakeMuxDevice("AAA", "USB")]
-    devices["tunnels"] = {"AAA": [{}]}
 
     class FakeRsd:
         async def __aenter__(self):
@@ -781,13 +781,13 @@ def test_first_spoof_remembers_the_phone(devices, monkeypatch):
         async def set(self, lat, lon):
             pass
 
-    async def rsd_by_udid(udid):
-        return FakeRsd()
+    async def open_tunnel(udid):
+        return FakeTunnel(udid), FakeRsd()
 
     async def auto_mount(rsd):
         pass
 
-    monkeypatch.setattr(phone, "get_tunneld_device_by_udid", rsd_by_udid)
+    monkeypatch.setattr(phone, "open_tunnel", open_tunnel)
     monkeypatch.setattr(phone, "auto_mount", auto_mount)
     monkeypatch.setattr(phone, "DvtProvider", Dvt)
     monkeypatch.setattr(phone, "LocationSimulation", Sim)

@@ -127,19 +127,21 @@ def install_pretend_phone(world: World) -> None:
             raise pmd_exc.NoDeviceConnectedError()
         return Lockdown()
 
-    async def tunnels():
-        return {} if world.unplugged() else {"STRESS-0001": [{}]}
+    class Tunnel:
+        async def aclose(self):
+            pass
 
-    async def rsd_by_udid(udid):
-        return None if world.unplugged() else Rsd()
+    async def open_tunnel(udid):
+        if world.unplugged():
+            raise pmd_exc.NoDeviceConnectedError()
+        return Tunnel(), Rsd()
 
     async def auto_mount(rsd):
         pass
 
     phone.list_devices = list_devices
     phone.create_using_usbmux = create_using_usbmux
-    phone.get_tunneld_tunnels = tunnels
-    phone.get_tunneld_device_by_udid = rsd_by_udid
+    phone.open_tunnel = open_tunnel
     phone.auto_mount = auto_mount
     phone.DvtProvider = Dvt
     phone.LocationSimulation = Sim
