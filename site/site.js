@@ -90,6 +90,11 @@ const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").match
       el.append(word);
     });
   });
+  // A block cursor trails the last word.
+  const cursor = document.createElement("span");
+  cursor.className = "cursor";
+  cursor.setAttribute("aria-hidden", "true");
+  el.append(cursor);
   const words = [...el.querySelectorAll(".w")];
   if (reduceMotion || !("IntersectionObserver" in window)) {
     words.forEach((w) => w.classList.add("on"));
