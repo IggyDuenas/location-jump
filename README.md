@@ -72,11 +72,12 @@ In Terminal, inside the `location-jump` folder:
 ./start.sh
 ```
 
-The script does everything for you, explaining each step as it goes:
+The script does everything for you, explaining each step as it goes. It **never asks for your Mac password**, so it works on accounts that aren't administrators too:
 
 1. **Creates a Python "virtual environment"** in a hidden `.venv` folder and installs `pymobiledevice3` (the library that talks to iPhones) and `Flask` (the tiny web server). This happens only the first time and takes a minute or two.
-2. **Starts the iOS tunnel.** Since iOS 17, Apple only allows developer tools to talk to an iPhone through an encrypted network tunnel, and creating that tunnel needs administrator rights. That's why **it asks for your Mac login password**. Nothing appears while you type it; that's normal. The tunnel then keeps running in the background, so you won't be asked again until you restart your Mac.
-3. **Opens the web page** at **http://localhost:5000** in your browser.
+2. **Opens the web page** at **http://localhost:5000** in your browser.
+
+Since iOS 17, Apple only lets developer tools talk to an iPhone through an encrypted tunnel. Location Jump builds that tunnel itself, inside the app, as soon as you press Set Location. No administrator rights, no background service.
 
 > **Port 5000 note:** On newer Macs, the AirPlay Receiver already uses port 5000. If so, `start.sh` tells you and uses **http://localhost:5001** instead. To get 5000 back, turn off *System Settings → General → AirDrop & Handoff → AirPlay Receiver*.
 
@@ -92,7 +93,6 @@ It creates **Location Jump** in your Applications folder (the one in your home f
 
 - Open it from **Launchpad** or **Spotlight** (⌘+Space, type *Location Jump*), or drag it into the **Dock** for one click.
 - The first time, it sets itself up for a minute or two (you'll see a notification).
-- If the tunnel isn't running, macOS shows its normal **password dialog** (*"Location Jump needs your Mac password…"*).
 - The app keeps running in the background (there's no Dock icon or Terminal window) and opens the page in your browser. Opening it again while it's running just brings the page back.
 - To stop it, press **Quit** at the top right of the page. That puts your iPhone back to its real location first.
 
@@ -129,7 +129,7 @@ Good to know:
 ## Step 5: When you're done
 
 1. Press **Quit** at the top right of the page (or **Reset to Real Location**, or Ctrl+C in Terminal).
-2. Optionally stop the background tunnel with `./stop.sh` (it asks for your password). Restarting your Mac stops it too.
+2. That's it: nothing keeps running in the background once the app has quit.
 
 ---
 
@@ -142,32 +142,29 @@ Good to know:
 | **Your iPhone doesn't trust this Mac yet** / **You tapped "Don't Trust"** | Unplug and replug the cable, then tap **Trust**. If the prompt never appears: *Settings → General → Transfer or Reset iPhone → Reset → Reset Location & Privacy*, then replug. |
 | **Unlock your iPhone** | Unlock it with your passcode and try again. |
 | **Developer Mode is off** | See Step 1.2 above. The phone has to restart after turning it on. |
-| **The iOS 17 tunnel isn't running** | Open the app again or run `./start.sh` (it starts the tunnel). |
-| **The tunnel is running but hasn't reached your iPhone yet** | Keep the phone unlocked and plugged in for ~10 seconds. Still stuck? Run `./stop.sh`, then `./start.sh`. |
+| **Couldn't open the secure connection to your iPhone** | Keep the phone plugged in and unlocked, and press the button again. If it keeps happening, update the iPhone to iOS 17.4 or later. |
 | **Couldn't download the Developer Disk Image** | The first Set Location needs internet on the Mac. Check your connection and try again. |
 | **Lost the connection to the iPhone** | Usually the cable wiggled or the phone locked during setup. Just press the button again; the tool reconnects automatically. |
-| **Reconnecting to iPhone…** stays on | Plug the phone back in and unlock it. If it still doesn't recover after ~30 seconds, run `./stop.sh` then `./start.sh`, and your fake location comes back once the app reconnects. |
+| **Reconnecting to iPhone…** stays on | Plug the phone back in and unlock it. If it still doesn't recover after ~30 seconds, quit Location Jump and open it again, and your fake location comes back once the app reconnects. |
 | Wi-Fi mode is on but the status says **No iPhone found** after unplugging | Wait up to a minute with the phone unlocked. Check both are on the same Wi-Fi network (not a guest network). Still nothing? Plug the cable back in; it always works. |
 | **Couldn't reach the place search** | Search needs internet on your Mac. You can still click the map or use Random. |
 | Browser shows **"403 Forbidden"** at localhost:5000 | That's the Mac's AirPlay Receiver, not this app. Use the address `start.sh` printed (probably http://localhost:5001). |
 | App says **Python 3 isn't installed** | Run `xcode-select --install`, then `python3 --version`. If that doesn't print 3.9 or newer, install Python from [python.org](https://www.python.org/downloads/macos/). The real reason is in `~/Library/Logs/LocationJump.log`. |
-| Asked for a password your account doesn't have / *may not run sudo* | Your Mac account isn't an administrator. Creating the iOS 17 tunnel needs one, so have an administrator enter their name and password when the app starts. |
 | Phone seems stuck on a fake location | Press **Reset to Real Location**. If the tool isn't running anymore, simply **restart the iPhone**; that always restores the real GPS. |
 
-To see the tunnel's own log while debugging, stop it (`./stop.sh`) and run it in the foreground:
-`sudo .venv/bin/python -m pymobiledevice3 remote tunneld`
+While debugging, run `./start.sh` in Terminal (not the app) to see the app's log as it happens.
 
 ---
 
 ## How it works (for the curious)
 
 ```
-Browser (map UI) ──HTTP──► Flask app (app.py) ──► phone.py ──► tunneld (sudo, port 49151) ══encrypted tunnel══► iPhone
+Browser (map UI) ──HTTP──► Flask app (app.py) ──► phone.py ══encrypted iOS 17 tunnel (in-process, no root)══► iPhone
 ```
 
 - **`start.sh`**: setup and launch.
 - **`app.py`**: the Flask app, served by waitress, and its small JSON API (`/api/status`, `/api/location`, `/api/random`, `/api/reset`, `/api/drift`, `/api/walk`, `/api/state`, `/api/search`, `/api/saved`, `/api/favorites`, `/api/recents`, `/api/device`, `/api/wifi`, `/api/ping`, `/api/quit`).
-- **`phone.py`**: all the iPhone logic. It checks USB, trust, Developer Mode, and the tunnel in that order, so the status tells you the *first* thing that's wrong. It keeps one long-lived developer connection open, because iOS drops the simulated location when that connection closes. A background loop re-sends the location every few seconds (moving it slightly when drift is on), which is also how it notices a dropped connection and restores the location after reconnecting.
+- **`phone.py`**: all the iPhone logic. It checks USB, trust, and Developer Mode in that order, so the status tells you the *first* thing that's wrong. It opens the iOS 17 tunnel itself without root (pymobiledevice3's userspace tunnel on iOS 17.4+, or the tunnel macOS already keeps for the phone on iOS 17.0–17.3), and keeps one long-lived developer connection open through it, because iOS drops the simulated location when that connection closes. A background loop re-sends the location every few seconds (moving it slightly when drift is on), which is also how it notices a dropped connection and restores the location after reconnecting.
 - **`places.py`**: the 55 famous places for Random Location.
 - **`search.py`**: place search through OpenStreetMap's Nominatim service (rate-limited to 1 request per second and cached, per their usage policy).
 - **`routing.py`**: walk mode: street routes from routing.openstreetmap.de and the "where are we after N meters" math.

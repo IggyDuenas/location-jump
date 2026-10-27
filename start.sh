@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Location Jump: one-step setup + launch.
 #   1. Creates a Python virtual environment in .venv and installs the requirements
-#   2. Starts the iOS 17+ tunnel (needs your Mac password, because it creates a network interface)
-#   3. Launches the web app and opens it in your browser
+#   2. Launches the web app and opens it in your browser (the app makes the iOS 17 tunnel
+#      itself, so no Mac password is needed)
 #
 # ./start.sh               run in this Terminal window (Ctrl+C to stop)
 # ./start.sh --background  what "Location Jump.app" runs: no Terminal needed, uses macOS
@@ -46,8 +46,6 @@ Details are in ~/Library/Logs/LocationJump.log\" as critical" >/dev/null 2>&1 ||
   fi
   exit 1
 }
-
-TUNNELD_URL="http://127.0.0.1:49151"
 
 # Is Location Jump already running? (Port 5000 may belong to AirPlay instead, so ask for our name.)
 running_port() {
@@ -107,38 +105,7 @@ if [[ ! -f .venv/.installed ]] || [[ requirements.txt -nt .venv/.installed ]]; t
   touch .venv/.installed
 fi
 
-# --- 2. iOS 17+ tunnel ----------------------------------------------------------------------
-tunnel_running() { curl -fsS --max-time 2 "$TUNNELD_URL" >/dev/null 2>&1; }
-
-if tunnel_running; then
-  say "iOS tunnel is already running."
-else
-  say "Starting the iOS 17+ tunnel (tunneld)."
-  if (( BACKGROUND )); then
-    # Native macOS password dialog instead of a Terminal prompt.
-    osascript -e 'on run argv' \
-      -e 'do shell script (quoted form of (item 1 of argv)) & " -m pymobiledevice3 remote tunneld -d" with administrator privileges with prompt "Location Jump needs your Mac password to start the secure connection to your iPhone (required by iOS 17)."' \
-      -e 'end run' "$PWD/.venv/bin/python" \
-      || warn "The tunnel wasn't started (password dialog cancelled?). The app will explain how to start it."
-  else
-    echo "    iOS 17 only allows developer connections through an encrypted tunnel, and creating"
-    echo "    that tunnel needs administrator rights. macOS will now ask for your Mac login password."
-    echo "    (Nothing is shown while you type. That's normal.)"
-    sudo .venv/bin/python -m pymobiledevice3 remote tunneld -d
-  fi
-  for _ in $(seq 1 15); do
-    tunnel_running && break
-    sleep 1
-  done
-  if tunnel_running; then
-    say "Tunnel started. It keeps running in the background until you restart your Mac or run ./stop.sh."
-  elif (( ! BACKGROUND )); then
-    die "The tunnel didn't start. Try running it in the foreground to see the error:
-    sudo .venv/bin/python -m pymobiledevice3 remote tunneld"
-  fi
-fi
-
-# --- 3. Web app -----------------------------------------------------------------------------
+# --- 2. Web app -----------------------------------------------------------------------------
 if (( BACKGROUND )) && PORT_RUNNING="$(running_port)"; then
   echo "Already running on port $PORT_RUNNING; opening it."
   open "http://localhost:$PORT_RUNNING"
