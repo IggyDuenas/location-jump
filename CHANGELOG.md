@@ -11,6 +11,7 @@ All notable changes to Location Jump. Versions follow [semantic versioning](http
 ### Fixed
 - A hung iPhone command could freeze the whole page for about 20 seconds, because every request waiting for the phone tied up the web server (found by the stress test). Button presses now wait at most 5 s and only one at a time, getting a clear "busy" message otherwise; phone commands time out after 8 s instead of 20 s; the server has 16 threads. Under 40 simultaneous clients: worst ping 20 s → 0.25 s, throughput 31 → 279 requests/s.
 - Reset now stops the background loop immediately instead of on its next tick.
+- Favorites are capped at 200 (each save rewrites the file; the stress test showed thousands would slow things down). No memory leaks were found: server memory stays flat over 20,000+ requests.
 
 ## [1.0.0] - 2026-10-26
 

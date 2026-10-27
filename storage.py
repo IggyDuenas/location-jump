@@ -14,6 +14,7 @@ from phone import distance_m
 log = logging.getLogger(__name__)
 
 MAX_RECENTS = 12
+MAX_FAVORITES = 200  # every save rewrites the file, so keep it a sensible size
 SAME_PLACE_M = 30.0   # closer than this counts as the same place
 MAX_NAME_LEN = 80
 
@@ -21,6 +22,10 @@ MAX_NAME_LEN = 80
 def _clean_name(name: Optional[str]) -> Optional[str]:
     name = " ".join(str(name or "").split())[:MAX_NAME_LEN]
     return name or None
+
+
+class FavoritesFullError(Exception):
+    pass
 
 
 class SavedPlaces:
@@ -80,6 +85,8 @@ class SavedPlaces:
                     existing["name"] = _clean_name(name)
                     self._save()
                 return dict(existing)
+            if len(self._data["favorites"]) >= MAX_FAVORITES:
+                raise FavoritesFullError(f"You have {MAX_FAVORITES} favorites already. Remove some to add more.")
             entry = self._entry(name, lat, lon)
             self._data["favorites"].insert(0, entry)
             self._save()

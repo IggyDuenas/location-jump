@@ -854,3 +854,14 @@ def test_only_one_button_press_waits_others_get_busy_at_once(controller, monkeyp
     (code, waited), anchor = controller.run(scenario())
     assert code == "busy" and waited < 0.05  # told immediately, not after a wait
     assert anchor == (3, 4)  # the first click still went through
+
+
+def test_favorites_are_capped(client, monkeypatch):
+    import storage
+    monkeypatch.setattr(storage, "MAX_FAVORITES", 3)
+    for i in range(3):
+        assert client.post("/api/favorites", json={"name": f"F{i}", "lat": i, "lon": 0}).status_code == 200
+    r = client.post("/api/favorites", json={"name": "one too many", "lat": 50, "lon": 0})
+    assert r.status_code == 400 and "Remove some" in r.get_json()["error"]
+    # Re-saving an existing favorite (e.g. renaming it) still works when full.
+    assert client.post("/api/favorites", json={"name": "renamed", "lat": 0, "lon": 0}).status_code == 200

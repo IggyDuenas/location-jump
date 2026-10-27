@@ -18,7 +18,7 @@ from phone import PhoneController, PhoneError, validate_coords
 from places import PLACES
 from routing import MODES, Router
 from search import PlaceSearch
-from storage import SavedPlaces
+from storage import FavoritesFullError, SavedPlaces
 from version import __version__
 
 DEFAULT_DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "saved_places.json")
@@ -160,7 +160,10 @@ def create_app(controller=None, saved=None, searcher=None, router=None, on_quit=
             lat, lon = validate_coords(data.get("lat"), data.get("lon"))
         except PhoneError as err:
             return fail(err)
-        favorite = saved.add_favorite(data.get("name"), lat, lon)
+        try:
+            favorite = saved.add_favorite(data.get("name"), lat, lon)
+        except FavoritesFullError as err:
+            return fail(PhoneError(str(err), "favorites_full"))
         return jsonify(ok=True, favorite=favorite, **saved.all())
 
     @app.delete("/api/favorites/<fav_id>")
