@@ -5,6 +5,7 @@ All notable changes to Location Jump. Versions follow [semantic versioning](http
 ## [Unreleased]
 
 ### Fixed
+- **"Python 3 isn't installed" on Apple silicon Macs when the app ran in Intel mode (Rosetta)**, where Apple's Python fails with "missing compatible architecture". `start.sh` now switches back to native mode, and the app bundle asks macOS to prefer Apple silicon (run `./install-app.sh` again to get that part).
 - **"Python 3 isn't installed" when opening the app**, even though Python worked in Terminal. Apps opened from Launchpad don't get Terminal's PATH, and a broken leftover Homebrew or python.org link could be picked first. `start.sh` now tries every usual Python location, uses the first 3.9+ that runs, and logs why Apple's `python3` failed with a message that points at the real fix (install the tools, accept the Xcode license, or install from python.org).
 
 ### Removed

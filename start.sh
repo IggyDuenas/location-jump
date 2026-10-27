@@ -9,6 +9,14 @@
 #                          dialogs and notifications, and keeps the app running in the background
 set -euo pipefail
 
+# On Apple silicon the app can end up running in Intel mode (Rosetta), where Apple's Python
+# can't start ("missing compatible architecture"). Switch back to native mode first.
+if [[ "$(uname)" == "Darwin" && -z "${LJ_NATIVE:-}" ]] \
+   && [[ "$(sysctl -in sysctl.proc_translated 2>/dev/null)" == "1" ]]; then
+  export LJ_NATIVE=1
+  exec arch -arm64 /bin/bash "$0" "$@"
+fi
+
 cd "$(dirname "$0")"
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
 

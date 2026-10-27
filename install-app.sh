@@ -56,6 +56,9 @@ cat > "$APP/Contents/Info.plist" <<EOF
   <key>CFBundleShortVersionString</key><string>$VERSION</string>
   <key>CFBundleVersion</key><string>1</string>
   <key>LSMinimumSystemVersion</key><string>11.0</string>
+  <!-- The launcher is a script, so macOS can't tell which chip it's for and may pick Intel
+       (Rosetta). Prefer native Apple silicon. -->
+  <key>LSArchitecturePriority</key><array><string>arm64</string><string>x86_64</string></array>
   <!-- The launcher only starts the background server and opens your browser, then exits,
        so it shouldn't sit in the Dock. -->
   <key>LSUIElement</key><true/>
