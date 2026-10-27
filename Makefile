@@ -11,6 +11,8 @@ lint:  ## check code style and common mistakes
 	$(dir $(PY))shellcheck *.sh
 	node --check static/app.js
 	node --check site/site.js
+	node --check site/friends.js
+	node --check scripts/friends.mjs
 
 check: lint test  ## everything CI runs
 

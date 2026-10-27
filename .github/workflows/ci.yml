@@ -27,6 +27,8 @@ jobs:
         run: |
           node --check static/app.js
           node --check site/site.js
+          node --check site/friends.js
+          node --check scripts/friends.mjs
       - name: Website builds
         run: python scripts/build_site.py
 
