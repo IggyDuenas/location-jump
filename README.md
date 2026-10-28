@@ -17,7 +17,9 @@
 
 <p align="center"><b>Website: <a href="https://iggyduenas.github.io/location-jump/">iggyduenas.github.io/location-jump</a></b></p>
 
-A small tool for Apple silicon Macs that sets the GPS location of your USB-connected iPhone (iOS 17 or later) from a web page on your Mac. Pick a spot on a map, or hit **Random Location** to jump to one of 55 famous places. Your phone then reports that location to every app, including Snap Map.
+A small tool for Apple silicon Macs that sets the GPS location of your iPhone (iOS 17 or later, over USB or Wi-Fi) from a web page on your Mac. Pick a spot on a map, or hit **Random Location** to jump to one of 55 famous places. Your phone then reports that location to every app, including Snap Map.
+
+**No jailbreak, no Mac password, no admin account needed.** Free and open source.
 
 ![Location Jump showing the Eiffel Tower](docs/screenshots/main.png)
 
@@ -36,6 +38,7 @@ A small tool for Apple silicon Macs that sets the GPS location of your USB-conne
 
 - A Mac with **Apple silicon** (M1 or later, or MacBook Neo) on macOS 11 or later, and a USB cable for your iPhone. Intel Macs aren't supported.
 - An iPhone running **iOS 17 or later**
+- Any Mac account: **no administrator account and no Mac password needed**
 - About 10 minutes for the first setup
 
 ---
@@ -111,10 +114,7 @@ Good to know:
 - **🎲 Random Location** jumps to a random famous place (Eiffel Tower, Shibuya Crossing, Sydney Opera House, the Pyramids, and 51 more).
 - **Natural drift** wiggles your position by a few meters every ~5 seconds, so on Snap Map you look like a real person standing around rather than a frozen pin. It never wanders more than about 8 meters from the spot you chose. Turning it off snaps you back to the exact spot.
 - **Travel there (walk mode)**: instead of teleporting, pick a destination (search, map, or coordinates), choose **🚶 Walk**, **🏃 Jog**, **🚲 Bike** or **🚗 Drive**, and press **Go**. Your phone moves there at that speed (about 5, 10, 18 or 48 km/h), following real streets. A dashed line shows the route, and the top card shows a progress bar, the distance left, and the time remaining. Press **Stop here** to stay wherever you've got to. Turn off **Follow streets** to go in a straight line. Routes come from the free OpenStreetMap routing service; if it can't find one (for example across an ocean), the trip goes in a straight line and the app tells you. If the phone disconnects mid-trip, the trip pauses and carries on after reconnecting.
-- **Wi-Fi mode** (use it without the cable): with the iPhone **plugged in**, turn on **Wi-Fi mode** in the panel (it's the same as Finder's "Show this iPhone when on Wi-Fi"). After that you can unplug: the tunnel finds the phone over your Wi-Fi within about a minute, and the status pill shows **Wi-Fi** instead of **USB**. If you were already faking a location when you unplugged, auto-reconnect picks the phone back up over Wi-Fi and restores it. Things to know:
-  - The phone and Mac must be on the **same Wi-Fi network**. Office, hotel and guest networks often block devices from seeing each other, and then only the cable works.
-  - Keep the phone **awake** (unlocked, or charging) for the first connection. iPhones turn Wi-Fi down when they sleep, so the connection can drop and come back. Auto-reconnect handles that, but the cable is more reliable.
-  - The switch can only be changed while plugged in (Apple's rule). Turn it off the same way.
+- **Wi-Fi mode**: use it without the cable. See [Use it over Wi-Fi](#use-it-over-wi-fi) below.
 - **Several devices** (say your iPhone and an iPad, or a friend's phone): when more than one is connected, Location Jump **won't guess**. It asks which one to use, right in the panel. Later you can switch by clicking the status at the top. Switching puts the previous device back to its real location first. If the device you chose is unplugged, the app waits for *that* device rather than quietly switching to another. The first device you fake a location on is remembered, so plugging in a second one later changes nothing.
 - **Favorites and Recent** (bottom of the panel): tap the **☆** next to the place your phone is showing to save it as a favorite. Every place you jump to is added to **Recent** automatically (the last 12). Click any saved place to jump straight there. They're stored in `saved_places.json` in the project folder, so they survive restarts.
 - **Your iPhone is showing** shows the exact coordinates your phone is reporting right now. The red dot on the map is the same thing.
@@ -122,9 +122,23 @@ Good to know:
 
 **Check it worked:** open Apple Maps or Snapchat → Snap Map on the phone. Snap Map updates your Bitmoji when you open the app, so open (or re-open) Snapchat after changing location.
 
-**Keep the phone plugged in and the app running** while you want the fake location. The fake location stays only while this tool is connected. If you press **Ctrl+C** in Terminal, the tool resets your phone to its real location before quitting.
+**Keep the phone connected (cable, or Wi-Fi in Wi-Fi mode) and the app running** while you want the fake location. The fake location stays only while this tool is connected. If you press **Ctrl+C** in Terminal, the tool resets your phone to its real location before quitting.
 
 **Auto-reconnect:** if the cable comes loose, the phone restarts, or the tunnel hiccups, your phone goes back to its real location for a moment. The status turns orange ("Reconnecting to iPhone…") and the app keeps retrying every few seconds. As soon as the phone is reachable again (plugged in and unlocked), your fake location is put back automatically. Press **Reset to Real Location** if you'd rather it didn't come back.
+
+## Use it over Wi-Fi
+
+Once it works with the cable, you can drop the cable:
+
+1. **Plug the iPhone in** and unlock it. Wait for the green **Ready** status.
+2. In the panel, turn on **Wi-Fi mode**. It's the same setting as Finder's "Show this iPhone when on Wi-Fi", and Apple only lets you change it over the cable.
+3. **Unplug.** Within about a minute the status pill switches from **USB** to **Wi-Fi**. Now press **Set Location** as usual.
+
+If you were already faking a location when you unplugged, auto-reconnect picks the phone back up over Wi-Fi and restores it. Things to know:
+
+- The phone and Mac must be on the **same Wi-Fi network**. Office, school, hotel and guest networks often block devices from seeing each other, and then only the cable works.
+- Keep the phone **awake** (unlocked, or charging) for the first connection. iPhones turn Wi-Fi down when they sleep, so the connection can drop and come back. Auto-reconnect handles that, but the cable is more reliable.
+- To turn Wi-Fi mode off, plug the phone back in and flip the same switch.
 
 ## Step 5: When you're done
 
