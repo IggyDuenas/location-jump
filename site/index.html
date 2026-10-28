@@ -107,6 +107,7 @@
         <ul class="proof" aria-label="At a glance">
           <li><svg class="ic" aria-hidden="true"><use href="#i-dice-five"/></svg>55 famous places built in</li>
           <li><svg class="ic" aria-hidden="true"><use href="#i-shield-check"/></svg>No jailbreak needed</li>
+          <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>No password needed</li>
           <li><svg class="ic" aria-hidden="true"><use href="#i-lock-simple"/></svg>Runs only on your Mac</li>
         </ul>
         <figure class="window hero-shot reveal">
@@ -231,7 +232,7 @@
           <li class="card reveal">
             <div class="icon" aria-hidden="true"><svg class="ic"><use href="#i-shield-check"/></svg></div>
             <h3>Secure tunnel</h3>
-            <p>An encrypted iOS 17 developer connection over USB or Wi-Fi, powered by <a href="https://github.com/doronz88/pymobiledevice3">pymobiledevice3</a>.</p>
+            <p>An encrypted iOS 17 developer connection over USB or Wi-Fi, built right inside the app, so no Mac password is needed. Powered by <a href="https://github.com/doronz88/pymobiledevice3">pymobiledevice3</a>.</p>
           </li>
           <li class="card reveal">
             <div class="icon" aria-hidden="true"><svg class="ic"><use href="#i-device-mobile"/></svg></div>
@@ -291,7 +292,7 @@ cd location-jump</code></pre></div>
 
     <!-- FAQ -->
     <section class="section" id="faq">
-      <div class="wrap narrow">
+      <div class="wrap">
         <div class="head reveal">
           <p class="kicker">FAQ</p>
           <h2>Questions, answered</h2>
@@ -346,8 +347,8 @@ cd location-jump</code></pre></div>
             <p>Open Terminal and run <code>xcode-select --install</code>, then <code>python3 --version</code>. If that still doesn't print 3.9 or newer, install Python from <a href="https://www.python.org/downloads/macos/">python.org</a> with the macOS installer. Then quit and reopen Location Jump; the reason it couldn't start is in <code>~/Library/Logs/LocationJump.log</code>.</p>
           </details>
           <details>
-            <summary>What if my Mac account isn't an administrator?</summary>
-            <p>That's fine. Location Jump never asks for a Mac password: it builds the secure connection to iOS 17 inside the app, so any account can use it.</p>
+            <summary>Does it need my Mac password or an admin account?</summary>
+            <p>No. Location Jump never asks for a Mac password: it builds the secure connection to iOS 17 inside the app, so any account can use it, administrator or not.</p>
           </details>
           <details>
             <summary>How do I update it?</summary>
